@@ -1,5 +1,5 @@
+import Image from 'next/image'
 import { login } from '@/lib/auth'
-import { MessageSquare } from 'lucide-react'
 
 export default function LoginPage() {
   return (
@@ -7,10 +7,16 @@ export default function LoginPage() {
       {/* Left panel */}
       <div className="hidden lg:flex lg:w-1/2 bg-green-600 flex-col items-center justify-center p-12 text-white">
         <div className="max-w-md">
-          <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center mb-8">
-            <MessageSquare className="w-7 h-7 text-white" />
+          <div className="mb-8">
+            <Image
+              src="/Logos PNG/Logo-05.png"
+              alt="Scale Estratégia Digital"
+              width={220}
+              height={220}
+              className="w-44 h-auto"
+              priority
+            />
           </div>
-          <h1 className="text-4xl font-bold mb-4">Meta Conecta</h1>
           <p className="text-green-100 text-lg leading-relaxed">
             Plataforma de comunicação via WhatsApp Business API. Envie mensagens, gerencie clientes e automatize seu atendimento.
           </p>
@@ -31,11 +37,15 @@ export default function LoginPage() {
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="w-full max-w-sm">
           {/* Mobile logo */}
-          <div className="lg:hidden flex items-center gap-2 justify-center mb-8">
-            <div className="w-9 h-9 bg-green-600 rounded-xl flex items-center justify-center">
-              <MessageSquare className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-xl font-bold text-gray-900">Meta Conecta</span>
+          <div className="lg:hidden flex items-center justify-center mb-8">
+            <Image
+              src="/Logos PNG/Logo-09.png"
+              alt="Scale Estratégia Digital"
+              width={180}
+              height={50}
+              className="h-10 w-auto"
+              priority
+            />
           </div>
 
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">

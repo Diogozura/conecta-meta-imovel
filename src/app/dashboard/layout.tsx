@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { logout } from '@/lib/auth'
@@ -49,11 +50,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         }`}
       >
         {/* Logo */}
-        <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-100">
-          <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
-            <MessageSquare className="w-4 h-4 text-white" />
-          </div>
-          <span className="text-lg font-bold text-gray-900">Meta Conecta</span>
+        <div className="flex items-center px-5 py-4 border-b border-gray-100">
+          <Image
+            src="/Logos PNG/Logo-09.png"
+            alt="Scale Estratégia Digital"
+            width={160}
+            height={44}
+            className="h-9 w-auto"
+            priority
+          />
         </div>
 
         {/* Nav */}
