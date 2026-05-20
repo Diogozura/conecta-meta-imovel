@@ -1,5 +1,12 @@
+import type { Metadata } from 'next'
 import { login } from '@/lib/auth'
 import Image from 'next/image'
+
+export const metadata: Metadata = {
+  title: "Entrar | Scale Estratégia Digital",
+  description:
+    "Acesse a plataforma de comunicação via WhatsApp Business API da Scale Estratégia Digital para enviar mensagens, gerenciar clientes e automatizar seu atendimento.",
+};
 
 export default function LoginPage() {
   return (
