@@ -1,30 +1,41 @@
-import Image from 'next/image'
 import { login } from '@/lib/auth'
+import Image from 'next/image'
 
 export default function LoginPage() {
   return (
-    <div className="flex min-h-screen bg-gradient-to-br from-green-50 to-gray-100">
-      {/* Left panel */}
-      <div className="hidden lg:flex lg:w-1/2 bg-green-600 flex-col items-center justify-center p-12 text-white">
-        <div className="max-w-md">
-          <div className="mb-8">
+    <div className="flex min-h-screen bg-[#f5f5f5]">
+      {/* Left panel — brand */}
+      <div className="hidden lg:flex lg:w-1/2 bg-[#111111] flex-col items-center justify-center p-12 relative overflow-hidden">
+        {/* Decorative background circles */}
+        <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-[#D42026]/10 blur-3xl" />
+        <div className="absolute -bottom-32 -right-32 w-96 h-96 rounded-full bg-[#D42026]/10 blur-3xl" />
+
+        <div className="relative max-w-md z-10">
+          {/* Logo */}
+          <div className="mb-10">
             <Image
-              src="/Logos PNG/Logo-05.png"
-              alt="Scale Estratégia Digital"
-              width={220}
-              height={220}
-              className="w-44 h-auto"
-              priority
+              src="/Logos PNG/Logo-06.png"
+              alt="scale Estratégia Digital"
+              width={260}
+              height={100}
+              className="brightness-0 invert"
             />
           </div>
-          <p className="text-green-100 text-lg leading-relaxed">
+
+          <p className="text-gray-400 text-lg leading-relaxed mb-10">
             Plataforma de comunicação via WhatsApp Business API. Envie mensagens, gerencie clientes e automatize seu atendimento.
           </p>
-          <div className="mt-10 space-y-3">
-            {['Envio de mensagens em massa', 'Templates personalizados', 'Cadastro e gestão de clientes', 'Múltiplos números conectados'].map((f) => (
-              <div key={f} className="flex items-center gap-3 text-green-100 text-sm">
-                <div className="w-5 h-5 bg-white/20 rounded-full flex items-center justify-center shrink-0">
-                  <span className="text-white text-xs">✓</span>
+
+          <div className="space-y-3">
+            {[
+              'Envio de mensagens em massa',
+              'Templates personalizados',
+              'Cadastro e gestão de clientes',
+              'Múltiplos números conectados',
+            ].map((f) => (
+              <div key={f} className="flex items-center gap-3 text-gray-400 text-sm">
+                <div className="w-5 h-5 bg-[#D42026] rounded-full flex items-center justify-center shrink-0">
+                  <span className="text-white text-xs font-bold">✓</span>
                 </div>
                 {f}
               </div>
@@ -33,24 +44,22 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Right panel */}
+      {/* Right panel — form */}
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="w-full max-w-sm">
           {/* Mobile logo */}
-          <div className="lg:hidden flex items-center justify-center mb-8">
+          <div className="lg:hidden flex flex-col items-center gap-2 mb-8">
             <Image
-              src="/Logos PNG/Logo-09.png"
-              alt="Scale Estratégia Digital"
+              src="/Logos PNG/Logo-06.png"
+              alt="scale Estratégia Digital"
               width={180}
-              height={50}
-              className="h-10 w-auto"
-              priority
+              height={70}
             />
           </div>
 
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
             <div className="mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">Bem-vindo!</h2>
+              <h2 className="text-2xl font-bold text-[#1a1a1a]">Bem-vindo!</h2>
               <p className="text-sm text-gray-500 mt-1">Entre com suas credenciais para continuar</p>
             </div>
 
@@ -62,7 +71,7 @@ export default function LoginPage() {
                   name="email"
                   required
                   autoComplete="email"
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#D42026]/40 focus:border-[#D42026] transition"
                   placeholder="seu@email.com"
                 />
               </div>
@@ -73,22 +82,24 @@ export default function LoginPage() {
                   name="password"
                   required
                   autoComplete="current-password"
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#D42026]/40 focus:border-[#D42026] transition"
                   placeholder="••••••••"
                 />
               </div>
               <button
                 type="submit"
-                className="w-full py-2.5 px-4 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2"
+                className="w-full py-2.5 px-4 bg-[#D42026] hover:bg-[#A81820] text-white text-sm font-semibold rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-[#D42026] focus:ring-offset-2"
               >
                 Entrar
               </button>
             </form>
           </div>
+
+          <p className="text-center text-xs text-gray-400 mt-6">
+            scale Estratégia Digital © {new Date().getFullYear()}
+          </p>
         </div>
       </div>
     </div>
   )
 }
-
-

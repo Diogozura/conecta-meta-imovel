@@ -2,21 +2,21 @@
 
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #1a1a1a;
+  --brand-red: #D42026;
+  --brand-red-dark: #A81820;
+  --brand-red-light: #E8464B;
+  --brand-black: #1a1a1a;
+  --sidebar-bg: #111111;
+  --sidebar-active: #D42026;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-brand: var(--brand-red);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {

@@ -131,7 +131,7 @@ export default function TemplatesPage() {
                 onChange={(e) => setName(e.target.value)}
                 required
                 placeholder="Ex: boas_vindas"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-400"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
               />
             </div>
             <div>
@@ -139,7 +139,7 @@ export default function TemplatesPage() {
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value as Category)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-400"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
               >
                 {categoryOptions.map((c) => (
                   <option key={c.value} value={c.value}>{c.label}</option>
@@ -151,7 +151,7 @@ export default function TemplatesPage() {
               <select
                 value={language}
                 onChange={(e) => setLanguage(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-400"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
               >
                 <option value="pt_BR">Português (BR)</option>
                 <option value="en_US">English (US)</option>
@@ -167,7 +167,7 @@ export default function TemplatesPage() {
               value={header}
               onChange={(e) => setHeader(e.target.value)}
               placeholder="Ex: Bem-vindo!"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-400"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
             />
           </div>
 
@@ -181,7 +181,7 @@ export default function TemplatesPage() {
               required
               rows={4}
               placeholder={"Olá, {{1}}! Seja bem-vindo(a) à nossa plataforma. Em caso de dúvidas, entre em contato."}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-400 resize-none"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-400 resize-none"
             />
           </div>
 
@@ -192,7 +192,7 @@ export default function TemplatesPage() {
               value={footer}
               onChange={(e) => setFooter(e.target.value)}
               placeholder="Ex: Não responda a este número."
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-400"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
             />
           </div>
 
@@ -261,5 +261,3 @@ export default function TemplatesPage() {
     </div>
   )
 }
-
-

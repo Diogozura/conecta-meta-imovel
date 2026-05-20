@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Scale | Meta Conecta",
-  description: "Plataforma de comunicação via WhatsApp Business API",
+  title: "scale | Estratégia Digital",
+  description: "Plataforma de comunicação via WhatsApp Business API — scale Estratégia Digital",
 };
 
 export default function RootLayout({

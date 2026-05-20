@@ -1,7 +1,7 @@
 'use client'
 
-import Image from 'next/image'
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { logout } from '@/lib/auth'
 import {
@@ -34,30 +34,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
+    <div className="flex h-screen bg-[#f5f5f5] overflow-hidden">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-20 bg-black/50 lg:hidden"
+          className="fixed inset-0 z-20 bg-black/60 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-30 w-64 bg-white border-r border-gray-200 flex flex-col transition-transform duration-300 lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-30 w-64 bg-[#111111] flex flex-col transition-transform duration-300 lg:static lg:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {/* Logo */}
-        <div className="flex items-center px-5 py-4 border-b border-gray-100">
+        <div className="flex items-center justify-center px-6 py-5 border-b border-white/10">
           <Image
-            src="/Logos PNG/Logo-09.png"
-            alt="Scale Estratégia Digital"
-            width={160}
-            height={44}
-            className="h-9 w-auto"
-            priority
+            src="/Logos PNG/Logo-06.png"
+            alt="scale Estratégia Digital"
+            width={140}
+            height={54}
+            className="brightness-0 invert"
           />
         </div>
 
@@ -73,26 +72,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 onClick={() => setSidebarOpen(false)}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group ${
                   active
-                    ? 'bg-green-50 text-green-700'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                    ? 'bg-[#D42026] text-white'
+                    : 'text-gray-400 hover:bg-white/10 hover:text-white'
                 }`}
               >
-                <Icon className={`w-5 h-5 ${active ? 'text-green-600' : 'text-gray-400 group-hover:text-gray-600'}`} />
+                <Icon className={`w-5 h-5 ${active ? 'text-white' : 'text-gray-500 group-hover:text-white'}`} />
                 <span className="flex-1">{item.label}</span>
-                {active && <ChevronRight className="w-4 h-4 text-green-500" />}
+                {active && <ChevronRight className="w-4 h-4 text-white/70" />}
               </Link>
             )
           })}
         </nav>
 
         {/* Logout */}
-        <div className="px-3 py-4 border-t border-gray-100">
+        <div className="px-3 py-4 border-t border-white/10">
           <form action={logout}>
             <button
               type="submit"
-              className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors"
+              className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 hover:bg-[#D42026]/20 hover:text-red-400 transition-colors"
             >
-              <LogOut className="w-5 h-5 text-gray-400" />
+              <LogOut className="w-5 h-5" />
               Sair
             </button>
           </form>
@@ -115,8 +114,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </h1>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-              <span className="text-xs font-bold text-green-700">U</span>
+            <div className="w-8 h-8 bg-[#D42026] rounded-full flex items-center justify-center">
+              <span className="text-xs font-bold text-white">S</span>
             </div>
           </div>
         </header>
@@ -126,7 +125,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {children}
         </main>
       </div>
-      
+
       {/* Alertas bonitinhos e Listeners de Webhooks em tempo real */}
       <Toaster richColors />
       <RealtimeListeners />

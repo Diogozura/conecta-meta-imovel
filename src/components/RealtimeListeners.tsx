@@ -1,41 +1,41 @@
 'use client'
 
 import { useEffect } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { createPusherClient } from '@/lib/pusher'
-import {
-  persistInboundMessage,
-  WHATSAPP_MESSAGE_EVENT,
-} from '@/lib/conversation-store'
 
 export function RealtimeListeners() {
+  const pathname = usePathname()
+  const router = useRouter()
+
   useEffect(() => {
-    const pusherClient = createPusherClient()
-    const channel = pusherClient.subscribe('whatsapp-chat')
+    if (pathname === '/dashboard/conversas') return
 
-    channel.bind('new-message', (data: any) => {
-      // 1. Persiste no localStorage (fonte de verdade global)
-      persistInboundMessage(data)
+    let since = Date.now()
 
-      // 2. Notifica componentes montados na mesma aba (ex: página de conversas)
-      window.dispatchEvent(
-        new CustomEvent(WHATSAPP_MESSAGE_EVENT, { detail: data }),
-      )
-
-      // 3. Toast de alerta
-      toast.success(`Nova mensagem de ${data.from}`, {
-        description: data.text || 'Mensagem recebida',
-        duration: 5000,
-        position: 'top-right',
-      })
-    })
-
-    return () => {
-      channel.unbind_all()
-      channel.unsubscribe()
-      pusherClient.disconnect()
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/messages?since=${since}`)
+        if (!res.ok) return
+        const { messages, serverTime } = await res.json()
+        since = serverTime
+        for (const msg of messages) {
+          toast.message(`Nova mensagem de ${msg.from}`, {
+            description: msg.text,
+            duration: 5000,
+            position: 'top-right',
+            action: {
+              label: 'Abrir',
+              onClick: () => router.push(`/dashboard/conversas?from=${msg.from}`),
+            },
+          })
+        }
+      } catch {}
     }
-  }, [])
+
+    const id = setInterval(poll, 3000)
+    return () => clearInterval(id)
+  }, [pathname, router])
 
   return null
 }

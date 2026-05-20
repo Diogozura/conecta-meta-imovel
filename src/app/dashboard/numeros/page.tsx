@@ -35,7 +35,7 @@ export default function NumerosPage() {
             <input
               type="text"
               placeholder="Ex: 5511999990000"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-400"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
             />
           </div>
           <div>
@@ -43,7 +43,7 @@ export default function NumerosPage() {
             <input
               type="text"
               placeholder="Ex: Suporte"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-400"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
             />
           </div>
           <div className="flex items-end">
@@ -86,4 +86,3 @@ export default function NumerosPage() {
     </div>
   )
 }
-

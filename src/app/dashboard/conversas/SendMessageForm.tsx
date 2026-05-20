@@ -54,7 +54,7 @@ export default function SendMessageForm() {
             onChange={(e) => setTo(e.target.value)}
             placeholder="Ex: 5511999990000"
             required
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-400"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
           />
         </div>
         <div>
@@ -65,7 +65,7 @@ export default function SendMessageForm() {
             rows={3}
             required
             placeholder="Digite a mensagem..."
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-400 resize-none"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-400 resize-none"
           />
         </div>
 
@@ -94,4 +94,3 @@ export default function SendMessageForm() {
     </div>
   )
 }
-
