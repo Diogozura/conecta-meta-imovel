@@ -14,19 +14,35 @@ import {
   ChevronRight,
   Menu,
   X,
-  Plug,
+  BookUser,
+  UserCircle,
+  UsersRound,
+  Zap,
+  ScrollText,
+  Megaphone,
+  BarChart2,
+  Settings,
+  Inbox,
+  Radio,
 } from 'lucide-react'
 import { useState } from 'react'
 import { Toaster } from 'sonner'
 import { RealtimeListeners } from '@/components/RealtimeListeners'
 
 const navItems = [
-  { href: '/dashboard', label: 'Visão Geral', icon: LayoutDashboard },
-  { href: '/dashboard/conversas', label: 'Conversas', icon: MessageSquare },
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/dashboard/clientes', label: 'Clientes', icon: Users },
+  { href: '/dashboard/numeros', label: 'Canais', icon: Radio },
+  { href: '/dashboard/conversas', label: 'Inbox', icon: Inbox },
+  { href: '/dashboard/contatos', label: 'Contatos', icon: BookUser },
+  { href: '/dashboard/usuarios', label: 'Usuários', icon: UserCircle },
+  { href: '/dashboard/equipes', label: 'Equipes e Setores', icon: UsersRound },
+  { href: '/dashboard/automacoes', label: 'Automações', icon: Zap },
+  { href: '/dashboard/logs', label: 'Logs', icon: ScrollText },
   { href: '/dashboard/templates', label: 'Templates', icon: FileText },
-  { href: '/dashboard/numeros', label: 'Números', icon: PhoneCall },
-  { href: '/dashboard/onboarding', label: 'Conectar WABA', icon: Plug },
+  { href: '/dashboard/campanhas', label: 'Campanhas', icon: Megaphone },
+  { href: '/dashboard/relatorios', label: 'Relatórios', icon: BarChart2 },
+  { href: '/dashboard/configuracoes', label: 'Configurações', icon: Settings },
 ]
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -84,17 +100,33 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           })}
         </nav>
 
-        {/* Logout */}
-        <div className="px-3 py-4 border-t border-white/10">
-          <form action={logout}>
-            <button
-              type="submit"
-              className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 hover:bg-[#D42026]/20 hover:text-red-400 transition-colors"
-            >
-              <LogOut className="w-5 h-5" />
-              Sair
-            </button>
-          </form>
+        {/* Bottom: status + user + logout */}
+        <div className="px-3 py-4 border-t border-white/10 space-y-3">
+          {/* Plataforma Online */}
+          <div className="flex items-center gap-2 px-3">
+            <span className="w-2 h-2 rounded-full bg-green-400 shrink-0" />
+            <span className="text-xs text-gray-400">Plataforma Online</span>
+          </div>
+
+          {/* User info */}
+          <div className="flex items-center gap-3 px-3">
+            <div className="w-8 h-8 rounded-full bg-[#D42026] flex items-center justify-center shrink-0">
+              <span className="text-xs font-bold text-white">A</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-white truncate">Admin</p>
+              <p className="text-[10px] text-gray-500 truncate">admin@empresa.com</p>
+            </div>
+            <form action={logout}>
+              <button
+                type="submit"
+                title="Sair"
+                className="p-1.5 rounded-md text-gray-400 hover:text-red-400 hover:bg-[#D42026]/20 transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </form>
+          </div>
         </div>
       </aside>
 
