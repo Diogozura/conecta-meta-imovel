@@ -29,14 +29,26 @@ export default function OnboardingPage() {
     setErrorMsg('')
 
     try {
-      // Busca nome e número formatado na API do Meta usando o token recém-obtido
-      const phoneRes = await fetch(
-        `https://graph.facebook.com/${process.env.NEXT_PUBLIC_META_GRAPH_API_VERSION}/${data.phoneNumberId}` +
-        `?fields=display_phone_number,verified_name&access_token=${data.accessToken}`
-      )
-      const phoneData = await phoneRes.json()
-      const displayPhoneNumber = phoneData.display_phone_number ?? ''
-      const verifiedName = phoneData.verified_name ?? ''
+      // Busca nome e número formatado na API do Meta — só se tiver phoneNumberId (CoEx pode não ter)
+      let displayPhoneNumber = ''
+      let verifiedName = ''
+      if (data.phoneNumberId) {
+        try {
+          const phoneRes = await fetch(
+            `https://graph.facebook.com/${process.env.NEXT_PUBLIC_META_GRAPH_API_VERSION}/${data.phoneNumberId}` +
+            `?fields=display_phone_number,verified_name&access_token=${data.accessToken}`
+          )
+          const phoneData = await phoneRes.json()
+          if (phoneRes.ok) {
+            displayPhoneNumber = phoneData.display_phone_number ?? ''
+            verifiedName = phoneData.verified_name ?? ''
+          } else {
+            console.warn('[onboarding] Não foi possível buscar dados do número:', phoneData)
+          }
+        } catch (phoneErr) {
+          console.warn('[onboarding] Falha ao buscar dados do número (não crítico):', phoneErr)
+        }
+      }
 
       // Persiste as credenciais no Firestore via Admin SDK (server-side)
       const res = await fetchApi('/api/meta/save-waba-credentials', {

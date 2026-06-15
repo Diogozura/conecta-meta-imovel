@@ -25,20 +25,21 @@ export async function POST(request: Request) {
 
   const { projectId, wabaId, phoneNumberId, displayPhoneNumber, verifiedName, businessToken } = body
 
-  if (!projectId || !wabaId || !phoneNumberId || !businessToken) {
-    return Response.json({ error: 'Parâmetros obrigatórios ausentes' }, { status: 400 })
+  // phoneNumberId é opcional no modo CoEx — o número já está ativo via QR Code
+  if (!projectId || !wabaId || !businessToken) {
+    return Response.json({ error: 'Parâmetros obrigatórios ausentes: projectId, wabaId, businessToken' }, { status: 400 })
   }
 
   try {
     const db = getAdminDb()
     const batch = db.batch()
 
-    // 1. Dados públicos do projeto — sem o token
+    // 1. Dados públicos do projeto — usa set+merge para funcionar mesmo se o doc ainda não existir
     const projectRef = db.collection('projects').doc(projectId)
-    batch.update(projectRef, {
-      waba: { wabaId, phoneNumberId, displayPhoneNumber, verifiedName },
+    batch.set(projectRef, {
+      waba: { wabaId, phoneNumberId: phoneNumberId ?? '', displayPhoneNumber: displayPhoneNumber ?? '', verifiedName: verifiedName ?? '' },
       updatedAt: FieldValue.serverTimestamp(),
-    })
+    }, { merge: true })
 
     // 2. Token isolado em coleção restrita (regra: allow read, write: if false)
     const secretRef = db.collection('project_secrets').doc(projectId)
@@ -48,20 +49,25 @@ export async function POST(request: Request) {
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true })
 
-    // 3. Índice de roteamento para o webhook
-    const lookupRef = db.collection('phone_number_lookup').doc(phoneNumberId)
-    batch.set(lookupRef, {
-      projectId,
-      wabaId,
-      displayPhoneNumber,
-      updatedAt: FieldValue.serverTimestamp(),
-    })
+    // 3. Índice de roteamento para o webhook — só cria se tiver phoneNumberId
+    if (phoneNumberId) {
+      const lookupRef = db.collection('phone_number_lookup').doc(phoneNumberId)
+      batch.set(lookupRef, {
+        projectId,
+        wabaId,
+        displayPhoneNumber: displayPhoneNumber ?? '',
+        updatedAt: FieldValue.serverTimestamp(),
+      })
+    }
 
     await batch.commit()
 
     return Response.json({ success: true })
   } catch (err) {
-    console.error('[save-waba-credentials]', err)
-    return Response.json({ error: 'Erro ao salvar credenciais' }, { status: 500 })
+    const detail = err instanceof Error
+      ? { message: err.message, stack: err.stack }
+      : String(err)
+    console.error('[save-waba-credentials] Falha ao gravar no Firestore:', detail)
+    return Response.json({ error: 'Erro ao salvar credenciais', detail: err instanceof Error ? err.message : String(err) }, { status: 500 })
   }
 }
