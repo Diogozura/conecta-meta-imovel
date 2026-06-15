@@ -7,6 +7,8 @@ import {
   ArrowRightLeft, MoreVertical, Paperclip, Smile,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useProject } from '@/lib/project-context'
+import EditProjectConfigModal from '@/components/EditProjectConfigModal'
 
 type Message = {
   id: string
@@ -81,6 +83,7 @@ export default function ConversasPage() {
 }
 
 function ConversasInner() {
+  const { currentProject } = useProject()
   const [conversations, setConversations] = useState<Conversation[]>(() => loadFromStorage())
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null)
   const [message, setMessage] = useState('')
@@ -229,7 +232,11 @@ function ConversasInner() {
       const res = await fetch('/api/meta/send-message', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: conv.number.replace(/\D/g, ''), message: msgText }),
+        body: JSON.stringify({ 
+          to: conv.number.replace(/\D/g, ''), 
+          message: msgText,
+          projectId: currentProject?.id
+        }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Erro ao enviar')
@@ -529,6 +536,7 @@ function ConversasInner() {
           </div>
         )}
       </div>
+      <EditProjectConfigModal />
     </div>
   )
 }

@@ -1,9 +1,41 @@
 import { cookies } from 'next/headers'
 import { createTemplate, type TemplateCategory, type TemplateComponent } from '@/lib/meta'
+import { firestore } from '@/lib/firebase'
+import { doc, getDoc } from 'firebase/firestore'
 
 async function requireAuth() {
   const store = await cookies()
   return !!store.get('session')
+}
+
+/**
+ * Busca configuração Meta do Firestore
+ */
+async function getMetaConfig(projectId: string) {
+  try {
+    const projectRef = doc(firestore, 'projects', projectId)
+    const projectSnap = await getDoc(projectRef)
+    
+    if (!projectSnap.exists()) {
+      throw new Error('Projeto não encontrado')
+    }
+
+    const projectData = projectSnap.data()
+    const wabaConfig = projectData?.wabaConfig
+
+    if (!wabaConfig?.wabaId || !wabaConfig?.businessToken) {
+      throw new Error('WABA não configurado. Contate o administrador.')
+    }
+
+    return {
+      wabaId: wabaConfig.wabaId,
+      businessToken: wabaConfig.businessToken,
+    }
+  } catch (error) {
+    throw new Error(
+      `Erro ao buscar configuração Meta do Firestore: ${error instanceof Error ? error.message : 'Erro desconhecido'}`
+    )
+  }
 }
 
 export async function POST(request: Request) {
@@ -18,6 +50,7 @@ export async function POST(request: Request) {
     header?: string
     bodyText?: string
     footer?: string
+    projectId?: string
   }
 
   try {
@@ -30,14 +63,20 @@ export async function POST(request: Request) {
     return Response.json({ error: 'Campos "name", "category" e "bodyText" são obrigatórios' }, { status: 400 })
   }
 
-  const wabaId = process.env.META_WABA_ID
-  const businessToken = process.env.META_BUSINESS_TOKEN
+  if (!body.projectId) {
+    return Response.json({ error: 'Campo "projectId" é obrigatório' }, { status: 400 })
+  }
 
-  if (!wabaId || !businessToken) {
-    return Response.json(
-      { error: 'META_WABA_ID e META_BUSINESS_TOKEN não configurados no .env.local' },
-      { status: 503 },
-    )
+  let wabaId: string
+  let businessToken: string
+
+  try {
+    const metaConfig = await getMetaConfig(body.projectId)
+    wabaId = metaConfig.wabaId
+    businessToken = metaConfig.businessToken
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Erro ao buscar configuração Meta'
+    return Response.json({ error: message }, { status: 503 })
   }
 
   // Monta os componentes: nome do template deve ser snake_case, sem espaços

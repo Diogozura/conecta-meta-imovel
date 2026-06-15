@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { login, signup } from '@/lib/auth'
 import { useAuthContext } from '@/lib/auth-context'
+import userService from '@/lib/user-service'
 import { toast } from 'sonner'
 import { Eye, EyeOff } from 'lucide-react'
 
@@ -18,11 +19,12 @@ export function LoginForm() {
   const [isSignUp, setIsSignUp] = useState(false)
   const [error, setError] = useState('')
 
-  // Redireciona se já está autenticado
-  if (isAuthenticated) {
-    router.push('/dashboard')
-    return null
-  }
+  // Redireciona se já está autenticado (em useEffect, não durante render)
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.push('/dashboard')
+    }
+  }, [isAuthenticated, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -31,19 +33,50 @@ export function LoginForm() {
 
     try {
       if (isSignUp) {
-        await signup(email, password)
+        const userCredential = await signup(email, password)
+        
+        // Criar usuário no Firestore
+        if (userCredential) {
+          try {
+            // Tenta verificar se é o primeiro usuário
+            const allUsers = await userService.getAllUsers?.() || []
+            const role = allUsers.length === 0 ? 'admin' : 'collaborator'
+            
+            await userService.createUser(
+              userCredential.uid,
+              email,
+              email.split('@')[0], // Usa primeira parte do email como nome
+              role
+            )
+            
+            if (role === 'admin') {
+              toast.success('Conta criada como Administrador!')
+            }
+          } catch (createErr) {
+            // Se falhar ao criar usuário, continua mesmo assim
+            console.warn('Erro ao criar usuário no Firestore:', createErr)
+            // Tenta criar como admin (pode ser primeiro usuário)
+            try {
+              await userService.createUser(
+                userCredential.uid,
+                email,
+                email.split('@')[0],
+                'admin'
+              )
+              toast.success('Conta criada!')
+            } catch {
+              // Mesmo que falhe, o usuário foi criado no Firebase Auth
+              // Ele conseguirá fazer login
+            }
+          }
+        }
+        
         toast.success('Conta criada com sucesso!')
-        // Aguarda um pouco e redireciona
-        setTimeout(() => {
-          router.push('/dashboard')
-        }, 1000)
+        setEmail('')
+        setPassword('')
       } else {
         await login(email, password)
         toast.success('Login realizado com sucesso!')
-        // Aguarda um pouco e redireciona
-        setTimeout(() => {
-          router.push('/dashboard')
-        }, 1000)
       }
     } catch (err: any) {
       let errorMessage = 'Erro ao processar solicitação'

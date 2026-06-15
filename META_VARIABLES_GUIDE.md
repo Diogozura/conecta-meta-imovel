@@ -1,6 +1,196 @@
-# Guia: Como encontrar as variáveis de ambiente do Meta
+# 🔌 Guia: Usar Dados Meta do Firebase
 
-Este documento detalha o passo a passo para encontrar as variáveis necessárias para a integração com a API do WhatsApp e Embedded Signup.
+## ✅ Mudança Importante
+
+Anteriormente, os dados Meta vinham do `.env.local`. Agora vêm do **Firestore** (projeto selecionado).
+
+```
+ANTES:  .env.local → Componentes
+AGORA:  Firestore Project → Contexto → Componentes
+```
+
+## 🚀 Como Usar
+
+### 1. Acessar Dados Meta do Projeto Atual
+
+```typescript
+'use client'
+
+import { useMetaConfig } from '@/lib/use-meta-config'
+
+export default function MinhaComponente() {
+  const { 
+    wabaId,                    // WABA ID do projeto
+    phoneNumberId,             // Phone Number ID
+    businessToken,             // Token de acesso
+    graphApiVersion,           // Versão da API
+    isConfigured,              // Se está tudo configurado
+    currentProject             // Projeto atual selecionado
+  } = useMetaConfig()
+
+  if (!isConfigured) {
+    return <p>Projeto não está configurado</p>
+  }
+
+  return <p>WABA: {wabaId}</p>
+}
+```
+
+### 2. Mostrar Alerta se Não Estiver Configurado
+
+```typescript
+'use client'
+
+import { MetaConfigAlert } from '@/components/MetaConfigAlert'
+
+export default function MinhaComponente() {
+  return (
+    <>
+      <MetaConfigAlert />
+      {/* Resto do componente */}
+    </>
+  )
+}
+```
+
+### 3. Fazer Chamada à Meta API
+
+```typescript
+'use client'
+
+import { useMetaConfig } from '@/lib/use-meta-config'
+
+export async function enviarMensagem(phoneNumber: string, mensagem: string) {
+  const { phoneNumberId, businessToken, graphApiVersion, isConfigured } = useMetaConfig()
+
+  if (!isConfigured) {
+    throw new Error('Projeto não configurado')
+  }
+
+  const url = `https://graph.instagram.com/${graphApiVersion}/${phoneNumberId}/messages`
+  
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${businessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      to: phoneNumber,
+      type: 'text',
+      text: { body: mensagem }
+    })
+  })
+
+  return response.json()
+}
+```
+
+## 📋 Dados Disponíveis
+
+```typescript
+const {
+  // Meta API Config
+  appId,                          // APP_ID
+  graphApiVersion,                // Graph API version (padrão: v21.0)
+  embeddedSignupConfigId,         // Config ID para signup
+  webhookVerifyToken,             // Token para validar webhooks
+  
+  // WABA Config
+  wabaId,                         // WhatsApp Business Account ID
+  phoneNumberId,                  // Número registrado no WABA
+  businessToken,                  // Token de acesso
+  
+  // Helpers
+  isConfigured,                   // true se tudo está configurado
+  isMissingPhoneNumber,           // true se falta Phone Number ID
+  isMissingBusinessToken,         // true se falta token
+  isMissingWabaId,               // true se falta WABA ID
+  
+  // Contexto
+  currentProject                  // Projeto selecionado no dashboard
+} = useMetaConfig()
+```
+
+## 🏗️ Arquitetura
+
+```
+Dashboard
+  ├─ ProjectSelector
+  │  └─ Carrega projeto do Firestore
+  │     └─ setCurrentProject()
+  │
+  └─ ProjectContext
+     ├─ currentProject
+     ├─ metaConfig (do projeto)
+     └─ wabaConfig (do projeto)
+        │
+        └─ useMetaConfig() ← Use em qualquer componente
+           ├─ wabaId, phoneNumberId, businessToken...
+           └─ isConfigured, isMissing...
+```
+
+## 🔒 Segurança
+
+- ❌ Tokens **nunca** mais em `.env.local`
+- ✅ Armazenados no Firestore
+- ✅ Acessíveis apenas por Admin/WABA_MANAGER
+- ✅ Sincronizados automaticamente
+- ✅ Cada projeto tem suas próprias credenciais
+
+## 📁 Arquivos
+
+- **[src/lib/project-context.tsx](src/lib/project-context.tsx)** - Contexto do projeto
+- **[src/lib/use-meta-config.ts](src/lib/use-meta-config.ts)** - Hook para acessar dados Meta
+- **[src/lib/meta-config-service.ts](src/lib/meta-config-service.ts)** - Serviço para buscar do Firestore
+- **[src/components/MetaConfigAlert.tsx](src/components/MetaConfigAlert.tsx)** - Alerta de configuração incompleta
+
+## 🎯 Exemplo Completo
+
+```typescript
+'use client'
+
+import { useMetaConfig } from '@/lib/use-meta-config'
+import { MetaConfigAlert } from '@/components/MetaConfigAlert'
+
+export default function ConversasPage() {
+  const { 
+    isConfigured, 
+    wabaId, 
+    phoneNumberId,
+    currentProject 
+  } = useMetaConfig()
+
+  return (
+    <div>
+      <h1>Conversas - {currentProject?.name}</h1>
+      
+      <MetaConfigAlert />
+      
+      {isConfigured && (
+        <div>
+          <p>WABA: {wabaId}</p>
+          <p>Número: {phoneNumberId}</p>
+          {/* Lista de conversas */}
+        </div>
+      )}
+    </div>
+  )
+}
+```
+
+## ✨ Benefícios
+
+- ✅ Dados vêm do Firestore (nunca estavam seguros no .env)
+- ✅ Cada projeto tem suas próprias credenciais
+- ✅ Admin controla tudo via interface
+- ✅ Colaboradores não veem tokens sensíveis
+- ✅ Dinâmico: muda ao trocar de projeto
+
+---
+
+**Status**: ✅ Todos os dados Meta agora vêm do Firebase!
 
 ## 1. META_WABA_ID (WhatsApp Business Account ID)
 

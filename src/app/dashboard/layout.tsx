@@ -26,10 +26,14 @@ import {
   Settings,
   Inbox,
   Radio,
+  Shield,
 } from 'lucide-react'
 import { useState } from 'react'
 import { Toaster } from 'sonner'
 import { RealtimeListeners } from '@/components/RealtimeListeners'
+import { ProjectSelector } from '@/components/ProjectSelector'
+import { useRole } from '@/lib/use-role'
+import ProjectInitializer from '@/components/ProjectInitializer'
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -45,13 +49,16 @@ const navItems = [
   { href: '/dashboard/campanhas', label: 'Campanhas', icon: Megaphone },
   { href: '/dashboard/relatorios', label: 'Relatórios', icon: BarChart2 },
   { href: '/dashboard/configuracoes', label: 'Configurações', icon: Settings },
+  { href: '/dashboard/admin', label: 'Admin', icon: Shield, adminOnly: true },
 ]
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { user } = useAuthContext()
+  const { user, userData } = useAuthContext()
+  const { isAdmin } = useRole()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [selectedProject, setSelectedProject] = useState<string>('')
 
   const handleLogout = async () => {
     try {
@@ -62,9 +69,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }
 
+  // Filtrar items de navegação baseado em role
+  const filteredNavItems = navItems.filter((item: any) => {
+    if (item.adminOnly) return isAdmin
+    return true
+  })
+
   return (
     <ProtectedRoute>
-      <div className="flex h-screen bg-[#f5f5f5] overflow-hidden">
+      <ProjectInitializer>
+        <div className="flex h-screen bg-[#f5f5f5] overflow-hidden">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
@@ -92,7 +106,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {navItems.map((item) => {
+          {filteredNavItems.map((item: any) => {
             const Icon = item.icon
             const active = pathname === item.href
             return (
@@ -122,16 +136,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <span className="text-xs text-gray-400">Plataforma Online</span>
           </div>
 
+          {/* Project Selector */}
+          <div className="px-3">
+            <ProjectSelector
+              currentProjectId={selectedProject}
+              onProjectChange={setSelectedProject}
+            />
+          </div>
+
           {/* User info */}
           <div className="flex items-center gap-3 px-3">
             <div className="w-8 h-8 rounded-full bg-[#D42026] flex items-center justify-center shrink-0">
               <span className="text-xs font-bold text-white">
-                {user?.email?.[0]?.toUpperCase() || 'U'}
+                {userData?.email?.[0]?.toUpperCase() || 'U'}
               </span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-white truncate">{user?.email?.split('@')[0] || 'Usuário'}</p>
-              <p className="text-[10px] text-gray-500 truncate">{user?.email || 'sem email'}</p>
+              <p className="text-xs font-semibold text-white truncate">{userData?.name || 'Usuário'}</p>
+              <p className="text-[10px] text-gray-500 truncate">{userData?.email || 'sem email'}</p>
             </div>
             <button
               onClick={handleLogout}
@@ -175,7 +197,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Alertas bonitinhos e Listeners de Webhooks em tempo real */}
       <Toaster richColors />
       <RealtimeListeners />
-      </div>
+        </div>
+      </ProjectInitializer>
     </ProtectedRoute>
   )
 }

@@ -1,14 +1,89 @@
-// Exemplo de tipos e funções para armazenar conversas no Firestore
 import { FirebaseDocument } from './firestore-service';
 
 /**
- * Interface para documentos de Conversas
+ * Tipos de roles no sistema
+ */
+export type UserRole = 'admin' | 'waba_manager' | 'collaborator';
+
+/**
+ * Interface para usuários
+ */
+export interface User extends FirebaseDocument {
+  email: string;
+  name: string;
+  role: UserRole;
+  avatar?: string;
+  permissions: {
+    canViewAllProjects: boolean;
+    canCreateProjects: boolean;
+    canManageUsers: boolean;
+    canAccessMeta: boolean;
+  };
+  assignedWabas?: string[]; // IDs de WABAs atribuídas ao WABA_MANAGER
+  createdAt: Date;
+}
+
+/**
+ * Interface para Configuração Meta (variáveis de conexão)
+ */
+export interface MetaConfig extends FirebaseDocument {
+  APP_ID: string;
+  APP_SECRET?: string; // Apenas para admin
+  GRAPH_API_VERSION: string;
+  EMBEDDED_SIGNUP_CONFIG_ID: string;
+  WEBHOOK_VERIFY_TOKEN: string;
+}
+
+/**
+ * Interface para WABA (WhatsApp Business Account)
+ */
+export interface Waba extends FirebaseDocument {
+  wabaId: string;
+  phoneNumberId?: string;
+  businessToken?: string; // Criptografado
+  clientName: string;
+  adminId: string; // ID do admin que cadastrou
+  wabaManagerId?: string; // ID do WABA manager atribuído
+  status: 'pending' | 'approved' | 'rejected' | 'active';
+  createdAt: Date;
+  approvedAt?: Date;
+}
+
+/**
+ * Interface para Projeto
+ */
+export interface Project extends FirebaseDocument {
+  name: string;
+  description?: string;
+  owner: string; // ID do usuário admin ou waba_manager
+  wabaId: string; // ID da WABA associada
+  collaborators: string[]; // IDs dos usuários colaboradores
+  metaConfig?: {
+    APP_ID: string;
+    GRAPH_API_VERSION: string;
+    EMBEDDED_SIGNUP_CONFIG_ID: string;
+    WEBHOOK_VERIFY_TOKEN: string;
+  };
+  waba?: {
+    WABA_ID: string;
+    PHONE_NUMBER_ID?: string;
+    BUSINESS_TOKEN?: string; // Criptografado
+  };
+  status: 'active' | 'inactive' | 'archived';
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
+ * Interface para Conversa
  */
 export interface Conversation extends FirebaseDocument {
+  projectId: string;
   userId: string;
   clientId: string;
   clientName: string;
   phoneNumber: string;
+  whatsappNumber?: string;
   lastMessage: string;
   lastMessageTime: Date | null;
   unreadCount: number;
@@ -17,14 +92,15 @@ export interface Conversation extends FirebaseDocument {
 }
 
 /**
- * Interface para documentos de Mensagens
+ * Interface para Mensagem
  */
 export interface Message extends FirebaseDocument {
+  projectId: string;
   conversationId: string;
   senderId: string;
-  senderType: 'user' | 'client'; // Se foi enviado pelo vendedor ou cliente
+  senderType: 'user' | 'client';
   content: string;
-  mediaUrl?: string; // URL de imagem/arquivo
+  mediaUrl?: string;
   mediaType?: 'image' | 'video' | 'audio' | 'file';
   timestamp: Date;
   read: boolean;
@@ -32,9 +108,10 @@ export interface Message extends FirebaseDocument {
 }
 
 /**
- * Interface para documentos de Clientes
+ * Interface para Cliente
  */
 export interface Client extends FirebaseDocument {
+  projectId: string;
   userId: string;
   name: string;
   email?: string;
@@ -48,9 +125,10 @@ export interface Client extends FirebaseDocument {
 }
 
 /**
- * Interface para documentos de Imoveis
+ * Interface para Imóvel
  */
 export interface Property extends FirebaseDocument {
+  projectId: string;
   userId: string;
   title: string;
   description: string;
@@ -62,63 +140,9 @@ export interface Property extends FirebaseDocument {
   propertyType: 'house' | 'apartment' | 'land' | 'commercial';
   bedrooms: number;
   bathrooms: number;
-  area: number; // em m²
-  images: string[]; // URLs do Firebase Storage
+  area: number;
+  images: string[];
   createdAt: Date;
   updatedAt: Date;
   active: boolean;
 }
-
-// Exemplo de como usar no seu componente:
-/*
-
-import firestoreService from '@/lib/firestore-service';
-import type { Conversation, Message, Client } from '@/lib/firebase-types';
-
-// Criar uma nova conversa
-const newConversation = await firestoreService.addDocument<Conversation>('conversations', {
-  userId: 'user123',
-  clientId: 'client456',
-  clientName: 'João Silva',
-  phoneNumber: '+55 11 98765-4321',
-  lastMessage: 'Olá, tem mais informações deste imóvel?',
-  lastMessageTime: new Date(),
-  unreadCount: 2,
-  status: 'active',
-  tags: ['vendedor1', 'acompanhamento'],
-});
-
-// Buscar conversas de um usuário
-const userConversations = await firestoreService.queryDocuments<Conversation>(
-  'conversations',
-  'userId',
-  '==',
-  'user123'
-);
-
-// Buscar uma conversa específica
-const conversation = await firestoreService.getDocument<Conversation>(
-  'conversations',
-  conversationId
-);
-
-// Adicionar mensagem
-const newMessage = await firestoreService.addDocument<Message>('messages', {
-  conversationId: 'conv123',
-  senderId: 'user123',
-  senderType: 'user',
-  content: 'Sim, vou enviar mais fotos!',
-  timestamp: new Date(),
-  read: false,
-  deliveryStatus: 'sent',
-});
-
-// Buscar mensagens de uma conversa
-const messages = await firestoreService.queryDocuments<Message>(
-  'messages',
-  'conversationId',
-  '==',
-  'conv123'
-);
-
-*/
