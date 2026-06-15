@@ -53,8 +53,7 @@ class MetaConfigService {
         metaConfig?.APP_ID &&
         metaConfig?.GRAPH_API_VERSION &&
         wabaConfig?.WABA_ID &&
-        wabaConfig?.PHONE_NUMBER_ID &&
-        wabaConfig?.BUSINESS_TOKEN
+        wabaConfig?.PHONE_NUMBER_ID
       );
     } catch {
       return false;

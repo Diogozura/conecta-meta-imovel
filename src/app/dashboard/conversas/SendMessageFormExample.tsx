@@ -10,13 +10,12 @@ import { MetaConfigAlert } from '@/components/MetaConfigAlert'
  * e não mais do .env.local
  */
 export function SendMessageFormExample() {
-  const { 
-    isConfigured, 
-    wabaId, 
-    phoneNumberId, 
-    businessToken, 
+  const {
+    isConfigured,
+    wabaId,
+    phoneNumberId,
     graphApiVersion,
-    currentProject 
+    currentProject
   } = useMetaConfig()
 
   if (!isConfigured) {

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useProject } from '@/lib/project-context'
 import { useMetaConfig } from '@/lib/use-meta-config'
 import projectService from '@/lib/project-service'
+import { fetchApi } from '@/lib/api-client'
 import { AlertCircle, Loader2, Edit2 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -15,7 +16,7 @@ export default function EditProjectConfigModal() {
   const [formData, setFormData] = useState({
     wabaId: currentProject?.waba?.WABA_ID || '',
     phoneNumberId: currentProject?.waba?.PHONE_NUMBER_ID || '',
-    businessToken: currentProject?.waba?.BUSINESS_TOKEN || '',
+    businessToken: '',
     appId: currentProject?.metaConfig?.APP_ID || '',
   })
 
@@ -36,10 +37,9 @@ export default function EditProjectConfigModal() {
       // Validação
       if (!formData.wabaId.trim()) throw new Error('WABA ID é obrigatório')
       if (!formData.phoneNumberId.trim()) throw new Error('Phone Number ID é obrigatório')
-      if (!formData.businessToken.trim()) throw new Error('Business Token é obrigatório')
       if (!formData.appId.trim()) throw new Error('App ID é obrigatório')
 
-      // Atualizar projeto
+      // Atualizar dados públicos do projeto
       await projectService.updateProject(currentProject.id, {
         metaConfig: {
           APP_ID: formData.appId.trim(),
@@ -50,9 +50,36 @@ export default function EditProjectConfigModal() {
         waba: {
           WABA_ID: formData.wabaId.trim(),
           PHONE_NUMBER_ID: formData.phoneNumberId.trim(),
-          BUSINESS_TOKEN: formData.businessToken.trim(),
         }
       })
+
+      // Salvar token em project_secrets via server-side
+      if (formData.businessToken.trim()) {
+        const saveRes = await fetchApi('/api/meta/save-waba-credentials', {
+          method: 'POST',
+          body: JSON.stringify({
+            projectId: currentProject.id,
+            wabaId: formData.wabaId.trim(),
+            phoneNumberId: formData.phoneNumberId.trim(),
+            displayPhoneNumber: currentProject.waba?.displayPhoneNumber || '',
+            verifiedName: currentProject.waba?.verifiedName || '',
+            businessToken: formData.businessToken.trim(),
+          }),
+        })
+
+        if (!saveRes.ok) {
+          let reason = 'configure as variáveis FIREBASE_ADMIN_* no .env.local'
+          try {
+            const json = await saveRes.json()
+            if (json.error) reason = json.error
+          } catch { /* resposta era HTML */ }
+          console.warn('[EditProject] Token não salvo no servidor:', reason)
+          toast.warning(`Projeto atualizado! Token pendente: ${reason}`)
+          setIsOpen(false)
+          window.location.reload()
+          return
+        }
+      }
 
       toast.success('Projeto atualizado com sucesso!')
       setIsOpen(false)
@@ -145,7 +172,7 @@ export default function EditProjectConfigModal() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Business Token *
+              Business Token (deixe em branco para manter o atual)
             </label>
             <input
               type="password"
@@ -154,7 +181,6 @@ export default function EditProjectConfigModal() {
               onChange={handleChange}
               placeholder="EAA... (token de acesso)"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-mono text-sm"
-              required
             />
           </div>
 

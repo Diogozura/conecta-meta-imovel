@@ -49,10 +49,9 @@ class AdminInitService {
         waba: {
           WABA_ID: process.env.NEXT_PUBLIC_META_WABA_ID || '1492759332552105',
           PHONE_NUMBER_ID: process.env.NEXT_PUBLIC_META_PHONE_NUMBER_ID,
-          BUSINESS_TOKEN: process.env.NEXT_PUBLIC_META_BUSINESS_TOKEN,
         },
         status: 'active',
-      } as Project);
+      });
 
       console.log('Admin inicializado com sucesso:', { projectId, wabaId });
       return { projectId, wabaId };

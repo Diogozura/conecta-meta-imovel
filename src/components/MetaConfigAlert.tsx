@@ -4,7 +4,7 @@ import { useMetaConfig } from '@/lib/use-meta-config'
 import { AlertCircle } from 'lucide-react'
 
 export function MetaConfigAlert() {
-  const { isConfigured, isMissingPhoneNumber, isMissingBusinessToken, isMissingWabaId } =
+  const { isConfigured, isMissingPhoneNumber, isMissingWabaId } =
     useMetaConfig()
 
   if (isConfigured) {
@@ -14,7 +14,6 @@ export function MetaConfigAlert() {
   const missingItems = []
   if (isMissingWabaId) missingItems.push('WABA ID')
   if (isMissingPhoneNumber) missingItems.push('Phone Number ID')
-  if (isMissingBusinessToken) missingItems.push('Business Token')
 
   return (
     <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
