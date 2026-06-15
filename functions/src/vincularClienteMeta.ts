@@ -39,9 +39,8 @@ export const vincularClienteMeta = onRequest(
 
     const appId = process.env.META_APP_ID
     const appSecret = process.env.META_APP_SECRET
-    // Token do System User do Tech Provider (usado para operações privilegiadas)
+    // System User Token — usado apenas para debug_token; /register não é chamado no CoEx.
     const systemUserToken = process.env.META_SYSTEM_USER_TOKEN
-    const registrationPin = process.env.META_REGISTRATION_PIN ?? '123456'
 
     if (!appId || !appSecret || !systemUserToken) {
       console.error('[vincularClienteMeta] Variáveis de ambiente ausentes')
@@ -86,7 +85,7 @@ export const vincularClienteMeta = onRequest(
       /* ── 3. Listar telefones do WABA ────────────────────────────────────── */
       const phonesRes = await fetch(
         `${GRAPH}/${wabaId}/phone_numbers` +
-          `?fields=id,display_phone_number,verified_name,code_verification_status,quality_rating` +
+          `?fields=id,display_phone_number,verified_name,quality_rating` +
           `&access_token=${accessToken}`,
       )
       const phonesData = await phonesRes.json() as PhoneNumbersResponse
@@ -104,48 +103,12 @@ export const vincularClienteMeta = onRequest(
       const displayPhoneNumber = phone.display_phone_number
       const verifiedName = phone.verified_name
 
-      /* ── 3b. Ponto 3 — valida status de verificação antes de registrar ─── */
-      // Se o usuário demorou no pop-up ou não completou a etapa de OTP, a Meta
-      // retorna code_verification_status = "EXPIRED" e a chamada /register falha
-      // com "does not exist or missing permissions".
-      if (phone.code_verification_status !== 'VERIFIED') {
-        res.status(422).json({
-          error:
-            'O código de verificação expirou ou o número não foi validado no pop-up. ' +
-            'Reinicie o Embedded Signup.',
-          code_verification_status: phone.code_verification_status,
-        })
-        return
-      }
+      // Modelo CoEx: NÃO chamamos POST /{phone_number_id}/register.
+      // O número já está ativo via QR Code no celular do cliente. Chamar /register
+      // manualmente derrubaria o aplicativo WhatsApp Business do celular.
 
-      /* ── 4. Registrar número na Cloud API ───────────────────────────────── */
-      // O System User Token do Tech Provider é necessário aqui pois o token do
-      // usuário final não tem permissão para registrar em WABAs de clientes.
-      const registerRes = await fetch(`${GRAPH}/${phoneNumberId}/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${systemUserToken}`,
-        },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          pin: registrationPin,
-        }),
-      })
-
-      if (!registerRes.ok) {
-        const registerErr = await registerRes.json() as { error?: { message: string; error_subcode?: number } }
-        // subcode 2688049 = número já registrado — não é um erro bloqueante
-        if (registerErr.error?.error_subcode !== 2688049) {
-          res.status(502).json({
-            error: 'Falha ao registrar número na Cloud API',
-            detail: registerErr.error?.message,
-          })
-          return
-        }
-      }
-
-      /* ── 5. Persistir no Firestore em /clientes/{clienteId} ─────────────── */
+      /* ── 4. Persistir no Firestore em /clientes/{clienteId} ──────────────
+         (era step 5; step 4 — registro manual — eliminado no modelo CoEx)    */
       const clienteRef = db.collection('clientes').doc(clienteId)
       await clienteRef.set(
         {
@@ -163,7 +126,7 @@ export const vincularClienteMeta = onRequest(
         { merge: true },
       )
 
-      /* ── 6. Índice de roteamento: phone_number_id → clienteId ───────────── */
+      /* ── 5. Índice de roteamento: phone_number_id → clienteId ──────────── */
       await db.collection('phone_number_lookup').doc(phoneNumberId).set(
         {
           clienteId,
@@ -203,7 +166,6 @@ interface PhoneNumbersResponse {
     id: string
     display_phone_number: string
     verified_name: string
-    code_verification_status: string
     quality_rating: string
   }>
   error?: { message: string }

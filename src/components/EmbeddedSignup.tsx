@@ -34,7 +34,7 @@ export default function EmbeddedSignup({ onSuccess }: EmbeddedSignupProps) {
   const [steps, setSteps] = useState<OnboardingStep[]>([
     { label: 'Autenticação via Facebook', status: 'idle' },
     { label: 'Troca de token de acesso', status: 'idle' },
-    { label: 'Registro do número na Cloud API', status: 'idle' },
+    { label: 'Leitura das credenciais da WABA', status: 'idle' },
     { label: 'Inscrição em webhooks', status: 'idle' },
   ])
 
@@ -105,7 +105,7 @@ export default function EmbeddedSignup({ onSuccess }: EmbeddedSignupProps) {
     setSteps([
       { label: 'Autenticação via Facebook', status: 'loading' },
       { label: 'Troca de token de acesso', status: 'idle' },
-      { label: 'Registro do número na Cloud API', status: 'idle' },
+      { label: 'Leitura das credenciais da WABA', status: 'idle' },
       { label: 'Inscrição em webhooks', status: 'idle' },
     ])
 
@@ -137,121 +137,68 @@ export default function EmbeddedSignup({ onSuccess }: EmbeddedSignupProps) {
             return
           }
 
-          // Passo 2: registrar número
+          // Passo 2 (CoEx): resolver WABA + phone IDs — sem chamada /register.
+          // No modelo de Coexistência, o número já está ativo via QR Code do celular.
+          // Chamar POST /register manual derrubaria o app WhatsApp Business do cliente.
           setStep(2, { status: 'loading' })
           let phoneNumberId = phoneNumberIdRef.current
           let wabaId = wabaIdRef.current
-          // Ponto 1 — graphVersion deve ser idêntica à versão usada no backend (META_GRAPH_API_VERSION).
           const graphVersion = process.env.NEXT_PUBLIC_META_GRAPH_API_VERSION ?? 'v21.0'
 
-          // Fallback 1: se o evento FINISH não trouxe waba_id, busca via Graph API
-          let fallbackWabaError = ''
-          let fallbackPhoneError = ''
+          // Fallback A: extrai waba_id via debug_token (granular_scopes) se o evento FINISH não trouxe
           if (!wabaId) {
-            // Log de diagnóstico: o que o token tem acesso?
-            try {
-              const meRes = await fetch(`https://graph.facebook.com/${graphVersion}/me?fields=id,name&access_token=${accessToken}`)
-              console.log('[EmbeddedSignup] /me:', JSON.stringify(await meRes.json()))
-            } catch (e) { console.log('[EmbeddedSignup] /me erro:', e) }
-
-            try {
-              const bizRes = await fetch(`https://graph.facebook.com/${graphVersion}/me/businesses?access_token=${accessToken}`)
-              console.log('[EmbeddedSignup] /me/businesses:', JSON.stringify(await bizRes.json()))
-            } catch (e) { console.log('[EmbeddedSignup] /me/businesses erro:', e) }
-
             try {
               const debugRes = await fetchApi('/api/meta/debug-token', {
                 method: 'POST',
                 body: JSON.stringify({ accessToken }),
               })
               const debugData = await debugRes.json()
-              console.log('[EmbeddedSignup] debug_token completo:', JSON.stringify(debugData))
-              // granular_scopes mostra os WABA IDs associados a esse token
-              const scopes: Array<{ scope: string; target_ids?: string[] }> = debugData?.data?.granular_scopes ?? []
-              console.log('[EmbeddedSignup] granular_scopes:', JSON.stringify(scopes))
-              const wabaScopeIds = scopes.find(s => s.scope === 'whatsapp_business_management')?.target_ids ?? []
-              console.log('[EmbeddedSignup] WABA IDs via granular_scopes:', wabaScopeIds)
-              if (!wabaId && wabaScopeIds.length > 0) {
-                wabaId = wabaScopeIds[0]
-                wabaIdRef.current = wabaId
-              }
-            } catch (e) { console.log('[EmbeddedSignup] debug_token erro:', e) }
+              const scopes: Array<{ scope: string; target_ids?: string[] }> =
+                debugData?.data?.granular_scopes ?? []
+              const ids = scopes.find(s => s.scope === 'whatsapp_business_management')?.target_ids ?? []
+              if (ids.length > 0) { wabaId = ids[0]; wabaIdRef.current = wabaId }
+            } catch { /* fallback B abaixo */ }
+          }
 
+          // Fallback B: lista WABAs vinculadas ao token do cliente
+          if (!wabaId) {
             try {
-              const wabasRes = await fetch(
+              const r = await fetch(
                 `https://graph.facebook.com/${graphVersion}/me/whatsapp_business_accounts?access_token=${accessToken}`
               )
-              const wabasData = await wabasRes.json()
-              console.log('[EmbeddedSignup] /me/whatsapp_business_accounts:', JSON.stringify(wabasData))
-              if (wabasRes.ok) {
-                const firstWaba = wabasData.data?.[0]?.id
-                if (firstWaba) {
-                  wabaId = firstWaba
-                  wabaIdRef.current = firstWaba
-                } else {
-                  fallbackWabaError = 'Nenhum WABA retornado pela API'
-                }
-              } else {
-                fallbackWabaError = wabasData?.error?.message ?? `HTTP ${wabasRes.status}`
-              }
-            } catch (e) {
-              fallbackWabaError = String(e)
-            }
+              const d = await r.json()
+              if (r.ok && d.data?.[0]?.id) { wabaId = d.data[0].id; wabaIdRef.current = wabaId }
+            } catch { /* ignora */ }
           }
 
-          // Fallback 2: se o evento FINISH não trouxe phone_number_id, busca via WABA
+          // Fallback C: busca phone_number_id dentro da WABA
           if (!phoneNumberId && wabaId) {
             try {
-              const phonesRes = await fetch(
+              const r = await fetch(
                 `https://graph.facebook.com/${graphVersion}/${wabaId}/phone_numbers?access_token=${accessToken}`
               )
-              const phonesData = await phonesRes.json()
-              console.log('[EmbeddedSignup] phone_numbers:', JSON.stringify(phonesData))
-              if (phonesRes.ok) {
-                const firstPhone = phonesData.data?.[0]?.id
-                if (firstPhone) {
-                  phoneNumberId = firstPhone
-                  phoneNumberIdRef.current = firstPhone
-                } else {
-                  fallbackPhoneError = 'Nenhum número retornado pelo WABA'
-                }
-              } else {
-                fallbackPhoneError = phonesData?.error?.message ?? `HTTP ${phonesRes.status}`
+              const d = await r.json()
+              if (r.ok && d.data?.[0]?.id) {
+                phoneNumberId = d.data[0].id
+                phoneNumberIdRef.current = phoneNumberId
               }
-            } catch (e) {
-              fallbackPhoneError = String(e)
-            }
+            } catch { /* ignora */ }
           }
 
-          if (!phoneNumberId) {
-            const detail = [
-              `WABA ID do evento: "${wabaIdRef.current || 'vazio'}"`,
-              `Phone ID do evento: "${phoneNumberIdRef.current || 'vazio'}"`,
-              fallbackWabaError && `Fallback WABA: ${fallbackWabaError}`,
-              fallbackPhoneError && `Fallback Phone: ${fallbackPhoneError}`,
-              !wabaId && !fallbackWabaError && 'Evento FINISH não capturado (popup fechado antes do WABA step?)',
-            ].filter(Boolean).join(' | ')
-            setStep(2, { status: 'error', detail })
-            return
-          }
-
-          try {
-            // Ponto 2 — não envia accessToken do cliente para o backend.
-            // O servidor usa exclusivamente META_BUSINESS_TOKEN (System User Token).
-            const res = await fetchApi('/api/meta/register-phone', {
-              method: 'POST',
-              body: JSON.stringify({ phoneNumberId }),
+          if (!wabaId) {
+            setStep(2, {
+              status: 'error',
+              detail:
+                'WABA não encontrada. Certifique-se de escanear o QR Code durante o ' +
+                'pop-up da Meta e aguardar a confirmação antes de fechar.',
             })
-            const json = await res.json()
-            if (!res.ok) {
-              // Ponto 3 — código expirado retorna 422 com mensagem amigável do backend.
-              throw new Error(json.error)
-            }
-            setStep(2, { status: 'done', detail: `Número registrado (ID: ${phoneNumberId}).` })
-          } catch (err) {
-            setStep(2, { status: 'error', detail: String(err) })
             return
           }
+
+          setStep(2, {
+            status: 'done',
+            detail: `WABA: ${wabaId}${phoneNumberId ? ` · Telefone ID: ${phoneNumberId}` : ''}`,
+          })
 
           // Passo 3: assinar webhooks
           setStep(3, { status: 'loading' })
@@ -296,6 +243,18 @@ export default function EmbeddedSignup({ onSuccess }: EmbeddedSignupProps) {
         </svg>
         Conectar com Facebook / WhatsApp Business
       </button>
+
+      {/* Instrução de Coexistência — exibida antes e durante o fluxo */}
+      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <p className="font-semibold mb-1">Atenção — Modo de Coexistência (CoEx)</p>
+        <p>
+          Durante o pop-up da Meta, escolha a opção{' '}
+          <strong>&ldquo;Conectar um aplicativo WhatsApp Business existente&rdquo;</strong>{' '}
+          e escaneie o QR Code com o aplicativo <strong>WhatsApp Business</strong> do
+          seu celular. O número continuará funcionando normalmente no celular enquanto
+          as mensagens são espelhadas na plataforma em tempo real.
+        </p>
+      </div>
 
       {steps.some((s) => s.status !== 'idle') && (
         <div className="space-y-3">

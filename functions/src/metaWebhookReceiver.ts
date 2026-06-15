@@ -147,12 +147,25 @@ async function processIncomingMessage(
   value: WebhookValue,
   msg: WebhookMessage,
 ): Promise<void> {
-  const contactName = value.contacts?.[0]?.profile?.name ?? msg.from
+  // Modelo CoEx: quando o dono do número envia uma mensagem pelo celular, a Meta
+  // entrega um evento de "echo" onde msg.from === número do próprio negócio.
+  // Normalizamos os números (remove não-dígitos) antes de comparar para lidar com
+  // formatações diferentes entre o campo from e o display_phone_number do metadata.
+  const normalize = (p: string) => p.replace(/\D/g, '')
+  const isEcho = normalize(msg.from) === normalize(value.metadata.display_phone_number)
+
+  // Para echoes, o contato é o destinatário (msg.to). Para mensagens recebidas, é o remetente.
+  const contactPhone = isEcho ? (msg.to ?? msg.from) : msg.from
+  const contactName = isEcho
+    ? contactPhone
+    : (value.contacts?.[0]?.profile?.name ?? msg.from)
+
   const content = msg.text?.body ?? extractMediaLabel(msg)
   const timestamp = Timestamp.fromMillis(parseInt(msg.timestamp) * 1000)
+  const direction = isEcho ? 'outbound' : 'inbound'
 
   // ID determinístico: uma conversa por (clienteId + número do contato)
-  const conversationId = `${clienteId}_${msg.from}`
+  const conversationId = `${clienteId}_${contactPhone}`
   const batch = db.batch()
 
   batch.set(
@@ -160,29 +173,31 @@ async function processIncomingMessage(
     {
       clienteId,
       phoneNumberId,
-      phoneNumber: msg.from,
+      phoneNumber: contactPhone,
       contactName,
       lastMessage: content,
       lastMessageTime: timestamp,
       status: 'active',
-      unreadCount: FieldValue.increment(1),
+      // Echoes (enviados pelo próprio celular) não incrementam mensagens não lidas
+      ...(isEcho ? {} : { unreadCount: FieldValue.increment(1) }),
       atualizadoEm: FieldValue.serverTimestamp(),
     },
     { merge: true },
   )
 
-  // Usa o ID da mensagem do Meta como chave para garantir idempotência
+  // ID da mensagem do Meta como chave — garante idempotência em re-entregas
   batch.set(db.collection('messages').doc(msg.id), {
     clienteId,
     conversationId,
     metaMessageId: msg.id,
     from: msg.from,
-    direction: 'inbound',
+    ...(isEcho && msg.to ? { to: msg.to } : {}),
+    direction,
     content,
     type: msg.type,
     timestamp,
-    read: false,
-    deliveryStatus: 'delivered',
+    read: isEcho,               // echoes já são considerados lidos
+    deliveryStatus: isEcho ? 'sent' : 'delivered',
     criadoEm: FieldValue.serverTimestamp(),
   })
 
@@ -236,6 +251,7 @@ interface WebhookValue {
 }
 interface WebhookMessage {
   from: string
+  to?: string
   id: string
   timestamp: string
   type: string
