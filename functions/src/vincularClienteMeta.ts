@@ -104,6 +104,20 @@ export const vincularClienteMeta = onRequest(
       const displayPhoneNumber = phone.display_phone_number
       const verifiedName = phone.verified_name
 
+      /* ── 3b. Ponto 3 — valida status de verificação antes de registrar ─── */
+      // Se o usuário demorou no pop-up ou não completou a etapa de OTP, a Meta
+      // retorna code_verification_status = "EXPIRED" e a chamada /register falha
+      // com "does not exist or missing permissions".
+      if (phone.code_verification_status !== 'VERIFIED') {
+        res.status(422).json({
+          error:
+            'O código de verificação expirou ou o número não foi validado no pop-up. ' +
+            'Reinicie o Embedded Signup.',
+          code_verification_status: phone.code_verification_status,
+        })
+        return
+      }
+
       /* ── 4. Registrar número na Cloud API ───────────────────────────────── */
       // O System User Token do Tech Provider é necessário aqui pois o token do
       // usuário final não tem permissão para registrar em WABAs de clientes.

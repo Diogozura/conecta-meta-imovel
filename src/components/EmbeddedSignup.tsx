@@ -141,6 +141,7 @@ export default function EmbeddedSignup({ onSuccess }: EmbeddedSignupProps) {
           setStep(2, { status: 'loading' })
           let phoneNumberId = phoneNumberIdRef.current
           let wabaId = wabaIdRef.current
+          // Ponto 1 — graphVersion deve ser idêntica à versão usada no backend (META_GRAPH_API_VERSION).
           const graphVersion = process.env.NEXT_PUBLIC_META_GRAPH_API_VERSION ?? 'v21.0'
 
           // Fallback 1: se o evento FINISH não trouxe waba_id, busca via Graph API
@@ -235,12 +236,17 @@ export default function EmbeddedSignup({ onSuccess }: EmbeddedSignupProps) {
           }
 
           try {
+            // Ponto 2 — não envia accessToken do cliente para o backend.
+            // O servidor usa exclusivamente META_BUSINESS_TOKEN (System User Token).
             const res = await fetchApi('/api/meta/register-phone', {
               method: 'POST',
-              body: JSON.stringify({ phoneNumberId, accessToken }),
+              body: JSON.stringify({ phoneNumberId }),
             })
             const json = await res.json()
-            if (!res.ok) throw new Error(json.error)
+            if (!res.ok) {
+              // Ponto 3 — código expirado retorna 422 com mensagem amigável do backend.
+              throw new Error(json.error)
+            }
             setStep(2, { status: 'done', detail: `Número registrado (ID: ${phoneNumberId}).` })
           } catch (err) {
             setStep(2, { status: 'error', detail: String(err) })
