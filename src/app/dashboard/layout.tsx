@@ -2,8 +2,10 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { logout } from '@/lib/auth'
+import { ProtectedRoute } from '@/lib/protected-route'
+import { useAuthContext } from '@/lib/auth-context'
 import {
   MessageSquare,
   Users,
@@ -47,10 +49,22 @@ const navItems = [
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const router = useRouter()
+  const { user } = useAuthContext()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
+  const handleLogout = async () => {
+    try {
+      await logout()
+      router.push('/login')
+    } catch (error) {
+      console.error('Erro ao fazer logout:', error)
+    }
+  }
+
   return (
-    <div className="flex h-screen bg-[#f5f5f5] overflow-hidden">
+    <ProtectedRoute>
+      <div className="flex h-screen bg-[#f5f5f5] overflow-hidden">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
@@ -111,21 +125,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {/* User info */}
           <div className="flex items-center gap-3 px-3">
             <div className="w-8 h-8 rounded-full bg-[#D42026] flex items-center justify-center shrink-0">
-              <span className="text-xs font-bold text-white">A</span>
+              <span className="text-xs font-bold text-white">
+                {user?.email?.[0]?.toUpperCase() || 'U'}
+              </span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-white truncate">Admin</p>
-              <p className="text-[10px] text-gray-500 truncate">admin@empresa.com</p>
+              <p className="text-xs font-semibold text-white truncate">{user?.email?.split('@')[0] || 'Usuário'}</p>
+              <p className="text-[10px] text-gray-500 truncate">{user?.email || 'sem email'}</p>
             </div>
-            <form action={logout}>
-              <button
-                type="submit"
-                title="Sair"
-                className="p-1.5 rounded-md text-gray-400 hover:text-red-400 hover:bg-[#D42026]/20 transition-colors"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            </form>
+            <button
+              onClick={handleLogout}
+              title="Sair"
+              className="p-1.5 rounded-md text-gray-400 hover:text-red-400 hover:bg-[#D42026]/20 transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </aside>
@@ -161,6 +175,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Alertas bonitinhos e Listeners de Webhooks em tempo real */}
       <Toaster richColors />
       <RealtimeListeners />
-    </div>
+      </div>
+    </ProtectedRoute>
   )
 }

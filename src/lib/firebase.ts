@@ -3,7 +3,7 @@ import { initializeApp, getApps } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
-import { getRealtimeDatabase } from 'firebase/database';
+import { getDatabase } from 'firebase/database';
 
 // Configuração do Firebase (do .env.local)
 const firebaseConfig = {
@@ -22,6 +22,6 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0
 export const auth = getAuth(app);
 export const firestore = getFirestore(app);
 export const storage = getStorage(app);
-export const database = getRealtimeDatabase(app);
+export const database = getDatabase(app);
 
 export default app;

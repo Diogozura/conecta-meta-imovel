@@ -1,27 +1,39 @@
-'use server'
+'use client'
 
-import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
+import { auth } from './firebase';
+import { signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 
-export async function login(formData: FormData) {
-  const email = formData.get('email')
-  const password = formData.get('password')
-  
-  // Fake validation
-  if (email && password) {
-    const cookieStore = await cookies()
-    cookieStore.set('session', 'fake-session-token', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 60 * 60 * 24 * 7, // One week
-      path: '/',
-    })
-    redirect('/dashboard')
+/**
+ * Fazer login com email e senha
+ */
+export async function login(email: string, password: string) {
+  try {
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    return userCredential.user;
+  } catch (error) {
+    throw error;
   }
 }
 
+/**
+ * Criar nova conta com email e senha
+ */
+export async function signup(email: string, password: string) {
+  try {
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    return userCredential.user;
+  } catch (error) {
+    throw error;
+  }
+}
+
+/**
+ * Fazer logout
+ */
 export async function logout() {
-  const cookieStore = await cookies()
-  cookieStore.delete('session')
-  redirect('/login')
+  try {
+    await signOut(auth);
+  } catch (error) {
+    throw error;
+  }
 }

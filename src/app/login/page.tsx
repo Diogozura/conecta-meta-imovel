@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
-import { login } from '@/lib/auth'
 import Image from 'next/image'
+import { LoginForm } from '@/components/LoginForm'
 
 export const metadata: Metadata = {
   title: "Entrar | Scale Estratégia Digital",
@@ -70,36 +70,7 @@ export default function LoginPage() {
               <p className="text-sm text-gray-500 mt-1">Entre com suas credenciais para continuar</p>
             </div>
 
-            <form action={login} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  name="email"
-                  required
-                  autoComplete="email"
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#D42026]/40 focus:border-[#D42026] transition"
-                  placeholder="seu@email.com"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Senha</label>
-                <input
-                  type="password"
-                  name="password"
-                  required
-                  autoComplete="current-password"
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#D42026]/40 focus:border-[#D42026] transition"
-                  placeholder="••••••••"
-                />
-              </div>
-              <button
-                type="submit"
-                className="w-full py-2.5 px-4 bg-[#D42026] hover:bg-[#A81820] text-white text-sm font-semibold rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-[#D42026] focus:ring-offset-2"
-              >
-                Entrar
-              </button>
-            </form>
+            <LoginForm />
           </div>
 
           <p className="text-center text-xs text-gray-400 mt-6">
