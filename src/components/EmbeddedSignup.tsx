@@ -73,9 +73,17 @@ export default function EmbeddedSignup({ onSuccess }: EmbeddedSignupProps) {
   // Listener para o evento FINISH do Embedded Signup (captura WABA + phone IDs)
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
-      if (event.origin !== 'https://www.facebook.com') return
+      // Aceita qualquer subdomínio do facebook.com (www, web, business, staticxx…)
       try {
-        const data = JSON.parse(event.data as string)
+        const { hostname } = new URL(event.origin)
+        if (!hostname.endsWith('facebook.com')) return
+      } catch {
+        return
+      }
+      try {
+        const data = typeof event.data === 'string'
+          ? JSON.parse(event.data)
+          : event.data
         if (data.type === 'WA_EMBEDDED_SIGNUP' && data.event === 'FINISH') {
           wabaIdRef.current = data.data?.waba_id ?? ''
           phoneNumberIdRef.current = data.data?.phone_number_id ?? ''
@@ -128,7 +136,35 @@ export default function EmbeddedSignup({ onSuccess }: EmbeddedSignupProps) {
 
           // Passo 2: registrar número
           setStep(2, { status: 'loading' })
-          const phoneNumberId = phoneNumberIdRef.current
+          let phoneNumberId = phoneNumberIdRef.current
+          const wabaId = wabaIdRef.current
+
+          // Fallback: se o evento FINISH não chegou, busca o número via API do Meta
+          if (!phoneNumberId && wabaId) {
+            try {
+              const graphVersion = process.env.NEXT_PUBLIC_META_GRAPH_API_VERSION ?? 'v21.0'
+              const phonesRes = await fetch(
+                `https://graph.facebook.com/${graphVersion}/${wabaId}/phone_numbers?access_token=${accessToken}`
+              )
+              if (phonesRes.ok) {
+                const phonesData = await phonesRes.json()
+                const firstPhone = phonesData.data?.[0]?.id
+                if (firstPhone) {
+                  phoneNumberId = firstPhone
+                  phoneNumberIdRef.current = firstPhone
+                }
+              }
+            } catch { /* fallback silencioso */ }
+          }
+
+          if (!phoneNumberId) {
+            setStep(2, {
+              status: 'error',
+              detail: 'Phone Number ID não recebido. Verifique se o Embedded Signup concluiu a etapa de WABA.',
+            })
+            return
+          }
+
           try {
             const res = await fetchApi('/api/meta/register-phone', {
               method: 'POST',
@@ -144,7 +180,6 @@ export default function EmbeddedSignup({ onSuccess }: EmbeddedSignupProps) {
 
           // Passo 3: assinar webhooks
           setStep(3, { status: 'loading' })
-          const wabaId = wabaIdRef.current
           try {
             const res = await fetchApi('/api/meta/subscribe-webhooks', {
               method: 'POST',
