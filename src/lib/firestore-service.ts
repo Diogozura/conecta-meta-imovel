@@ -89,6 +89,28 @@ class FirestoreService {
   }
 
   /**
+   * Criar ou substituir um documento com ID conhecido
+   */
+  async setDocument<T extends FirebaseDocument>(
+    collectionName: string,
+    docId: string,
+    data: T
+  ): Promise<void> {
+    try {
+      const docRef = doc(firestore, collectionName, docId);
+      const timestamp = new Date();
+      await setDoc(docRef, {
+        ...data,
+        createdAt: data.createdAt || timestamp,
+        updatedAt: timestamp,
+      });
+    } catch (error) {
+      console.error(`Erro ao definir documento: ${error}`);
+      throw error;
+    }
+  }
+
+  /**
    * Atualizar um documento
    */
   async updateDocument<T extends FirebaseDocument>(

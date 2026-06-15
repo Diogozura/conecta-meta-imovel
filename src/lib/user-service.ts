@@ -14,7 +14,7 @@ class UserService {
   ): Promise<void> {
     const permissions = this.getPermissionsForRole(role);
 
-    await firestoreService.addDocument<User>('users', {
+    await firestoreService.setDocument<User>('users', userId, {
       id: userId,
       email,
       name,

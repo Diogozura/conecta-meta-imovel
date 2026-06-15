@@ -78,15 +78,7 @@ export default function ProjectInitializer({
     )
   }
 
-  // Não há projetos e permite criar
-  if (userProjects.length === 0 && allowCreateProject) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-        <CreateProjectForm />
-      </div>
-    )
-  }
-
+  
   // Há projetos - renderizar conteúdo normal
   return <>{children}</>
 }
