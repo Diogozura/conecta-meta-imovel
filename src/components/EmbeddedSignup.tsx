@@ -84,9 +84,12 @@ export default function EmbeddedSignup({ onSuccess }: EmbeddedSignupProps) {
         const data = typeof event.data === 'string'
           ? JSON.parse(event.data)
           : event.data
-        if (data.type === 'WA_EMBEDDED_SIGNUP' && data.event === 'FINISH') {
-          wabaIdRef.current = data.data?.waba_id ?? ''
-          phoneNumberIdRef.current = data.data?.phone_number_id ?? ''
+        if (data.type === 'WA_EMBEDDED_SIGNUP') {
+          console.log('[EmbeddedSignup] postMessage recebido:', JSON.stringify(data))
+          if (data.event === 'FINISH' || data.event === 'FINISH_ONLY_WABA') {
+            wabaIdRef.current = data.data?.waba_id ?? ''
+            phoneNumberIdRef.current = data.data?.phone_number_id ?? ''
+          }
         }
       } catch {
         // ignora payloads não-JSON
@@ -141,20 +144,29 @@ export default function EmbeddedSignup({ onSuccess }: EmbeddedSignupProps) {
           const graphVersion = process.env.NEXT_PUBLIC_META_GRAPH_API_VERSION ?? 'v21.0'
 
           // Fallback 1: se o evento FINISH não trouxe waba_id, busca via Graph API
+          let fallbackWabaError = ''
+          let fallbackPhoneError = ''
           if (!wabaId) {
             try {
               const wabasRes = await fetch(
                 `https://graph.facebook.com/${graphVersion}/me/whatsapp_business_accounts?access_token=${accessToken}`
               )
+              const wabasData = await wabasRes.json()
+              console.log('[EmbeddedSignup] /me/whatsapp_business_accounts:', JSON.stringify(wabasData))
               if (wabasRes.ok) {
-                const wabasData = await wabasRes.json()
                 const firstWaba = wabasData.data?.[0]?.id
                 if (firstWaba) {
                   wabaId = firstWaba
                   wabaIdRef.current = firstWaba
+                } else {
+                  fallbackWabaError = 'Nenhum WABA retornado pela API'
                 }
+              } else {
+                fallbackWabaError = wabasData?.error?.message ?? `HTTP ${wabasRes.status}`
               }
-            } catch { /* fallback silencioso */ }
+            } catch (e) {
+              fallbackWabaError = String(e)
+            }
           }
 
           // Fallback 2: se o evento FINISH não trouxe phone_number_id, busca via WABA
@@ -163,22 +175,33 @@ export default function EmbeddedSignup({ onSuccess }: EmbeddedSignupProps) {
               const phonesRes = await fetch(
                 `https://graph.facebook.com/${graphVersion}/${wabaId}/phone_numbers?access_token=${accessToken}`
               )
+              const phonesData = await phonesRes.json()
+              console.log('[EmbeddedSignup] phone_numbers:', JSON.stringify(phonesData))
               if (phonesRes.ok) {
-                const phonesData = await phonesRes.json()
                 const firstPhone = phonesData.data?.[0]?.id
                 if (firstPhone) {
                   phoneNumberId = firstPhone
                   phoneNumberIdRef.current = firstPhone
+                } else {
+                  fallbackPhoneError = 'Nenhum número retornado pelo WABA'
                 }
+              } else {
+                fallbackPhoneError = phonesData?.error?.message ?? `HTTP ${phonesRes.status}`
               }
-            } catch { /* fallback silencioso */ }
+            } catch (e) {
+              fallbackPhoneError = String(e)
+            }
           }
 
           if (!phoneNumberId) {
-            setStep(2, {
-              status: 'error',
-              detail: 'Phone Number ID não recebido. Verifique se o Embedded Signup concluiu a etapa de WABA.',
-            })
+            const detail = [
+              `WABA ID do evento: "${wabaIdRef.current || 'vazio'}"`,
+              `Phone ID do evento: "${phoneNumberIdRef.current || 'vazio'}"`,
+              fallbackWabaError && `Fallback WABA: ${fallbackWabaError}`,
+              fallbackPhoneError && `Fallback Phone: ${fallbackPhoneError}`,
+              !wabaId && !fallbackWabaError && 'Evento FINISH não capturado (popup fechado antes do WABA step?)',
+            ].filter(Boolean).join(' | ')
+            setStep(2, { status: 'error', detail })
             return
           }
 
