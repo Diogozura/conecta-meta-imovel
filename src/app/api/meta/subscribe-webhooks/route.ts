@@ -1,13 +1,8 @@
-import { cookies } from 'next/headers'
+import { requireAuth } from '@/lib/server-auth'
 import { subscribeToWebhooks } from '@/lib/meta'
 
-async function requireAuth() {
-  const store = await cookies()
-  return !!store.get('session')
-}
-
 export async function POST(request: Request) {
-  if (!(await requireAuth())) {
+  if (!(await requireAuth(request))) {
     return Response.json({ error: 'Não autorizado' }, { status: 401 })
   }
 

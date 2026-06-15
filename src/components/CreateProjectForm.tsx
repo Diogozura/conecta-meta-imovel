@@ -2,12 +2,15 @@
 
 import { useState } from 'react'
 import { useAuthContext } from '@/lib/auth-context'
+import { useProject } from '@/lib/project-context'
 import projectService from '@/lib/project-service'
-import { AlertCircle } from 'lucide-react'
+import { AlertCircle, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { fetchApi } from '@/lib/api-client'
 
 export default function CreateProjectForm() {
   const { user } = useAuthContext()
+  const { setCurrentProject } = useProject()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [formData, setFormData] = useState({
@@ -23,10 +26,7 @@ export default function CreateProjectForm() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }))
+    setFormData(prev => ({ ...prev, [name]: value }))
     if (error) setError('')
   }
 
@@ -42,25 +42,14 @@ export default function CreateProjectForm() {
     }
 
     try {
-      // Validação básica
-      if (!formData.projectName.trim()) {
-        throw new Error('Nome do projeto é obrigatório')
-      }
-      if (!formData.wabaId.trim()) {
-        throw new Error('WABA ID é obrigatório')
-      }
-      if (!formData.phoneNumberId.trim()) {
-        throw new Error('Phone Number ID é obrigatório')
-      }
-      if (!formData.businessToken.trim()) {
-        throw new Error('Business Token é obrigatório')
-      }
-      if (!formData.appId.trim()) {
-        throw new Error('App ID é obrigatório')
-      }
+      if (!formData.projectName.trim()) throw new Error('Nome do projeto é obrigatório')
+      if (!formData.wabaId.trim()) throw new Error('WABA ID é obrigatório')
+      if (!formData.phoneNumberId.trim()) throw new Error('Phone Number ID é obrigatório')
+      if (!formData.businessToken.trim()) throw new Error('Business Token é obrigatório')
+      if (!formData.appId.trim()) throw new Error('App ID é obrigatório')
 
-      // Criar projeto com dados Meta
-      await projectService.createProject({
+      // 1. Cria o projeto SEM o token (dados públicos)
+      const projectId = await projectService.createProject({
         name: formData.projectName.trim(),
         description: 'Projeto criado manualmente',
         owner: user.uid,
@@ -76,26 +65,39 @@ export default function CreateProjectForm() {
         waba: {
           WABA_ID: formData.wabaId.trim(),
           PHONE_NUMBER_ID: formData.phoneNumberId.trim(),
-          BUSINESS_TOKEN: formData.businessToken.trim(),
+          // BUSINESS_TOKEN não vai aqui — vai para project_secrets via API
         },
       })
 
-      toast.success('Projeto criado com sucesso!')
-      
-      // Limpar formulário
-      setFormData({
-        projectName: '',
-        wabaId: '',
-        phoneNumberId: '',
-        businessToken: '',
-        appId: '',
-        graphApiVersion: 'v21.0',
-        embeddedSignupConfigId: '',
-        webhookVerifyToken: '',
+      // 2. Salva o token em project_secrets + cria o índice de roteamento do webhook
+      const saveRes = await fetchApi('/api/meta/save-waba-credentials', {
+        method: 'POST',
+        body: JSON.stringify({
+          projectId,
+          wabaId: formData.wabaId.trim(),
+          phoneNumberId: formData.phoneNumberId.trim(),
+          displayPhoneNumber: '',
+          verifiedName: '',
+          businessToken: formData.businessToken.trim(),
+        }),
       })
 
-      // Recarregar página
-      window.location.reload()
+      if (!saveRes.ok) {
+        // Não tenta parseJSON — resposta pode ser HTML se o Admin SDK não estiver configurado
+        let reason = 'configure as variáveis FIREBASE_ADMIN_* no .env.local'
+        try {
+          const json = await saveRes.json()
+          if (json.error) reason = json.error
+        } catch { /* resposta era HTML */ }
+        console.warn('[CreateProject] Token não salvo no servidor:', reason)
+        toast.warning(`Projeto criado! Token pendente: ${reason}`)
+      }
+
+      // 3. Ativa o projeto recém-criado no contexto
+      const newProject = await projectService.getProject(projectId)
+      if (newProject) setCurrentProject(newProject)
+
+      toast.success('Projeto criado com sucesso!')
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao criar projeto'
       setError(message)
@@ -105,17 +107,14 @@ export default function CreateProjectForm() {
     }
   }
 
-  // Só usuários autenticados podem criar projetos
   if (!user) {
     return (
       <div className="rounded-lg border border-amber-200 bg-amber-50 p-6">
         <div className="flex gap-3">
           <AlertCircle className="h-6 w-6 flex-shrink-0 text-amber-600" />
-          <div className="flex-1">
+          <div>
             <h3 className="font-semibold text-amber-900">Não Autenticado</h3>
-            <p className="text-sm text-amber-800 mt-1">
-              Por favor, faça login para criar um projeto.
-            </p>
+            <p className="text-sm text-amber-800 mt-1">Por favor, faça login para criar um projeto.</p>
           </div>
         </div>
       </div>
@@ -125,9 +124,7 @@ export default function CreateProjectForm() {
   return (
     <div className="w-full max-w-2xl mx-auto">
       <div className="rounded-lg border border-blue-200 bg-blue-50 p-8">
-        <h2 className="text-2xl font-bold text-blue-900 mb-2">
-          Criar Primeiro Projeto
-        </h2>
+        <h2 className="text-2xl font-bold text-blue-900 mb-2">Criar Primeiro Projeto</h2>
         <p className="text-blue-700 mb-6">
           Configure os dados do seu projeto Meta WhatsApp para começar a usar o sistema.
         </p>
@@ -142,11 +139,8 @@ export default function CreateProjectForm() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Nome do Projeto */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Nome do Projeto *
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Nome do Projeto *</label>
             <input
               type="text"
               name="projectName"
@@ -159,11 +153,8 @@ export default function CreateProjectForm() {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            {/* App ID */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                App ID *
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">App ID *</label>
               <input
                 type="text"
                 name="appId"
@@ -174,12 +165,8 @@ export default function CreateProjectForm() {
                 required
               />
             </div>
-
-            {/* Graph API Version */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Graph API Version
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Graph API Version</label>
               <input
                 type="text"
                 name="graphApiVersion"
@@ -192,11 +179,8 @@ export default function CreateProjectForm() {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            {/* WABA ID */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                WABA ID *
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">WABA ID *</label>
               <input
                 type="text"
                 name="wabaId"
@@ -207,29 +191,22 @@ export default function CreateProjectForm() {
                 required
               />
             </div>
-
-            {/* Phone Number ID */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Phone Number ID *
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number ID *</label>
               <input
                 type="text"
                 name="phoneNumberId"
                 value={formData.phoneNumberId}
                 onChange={handleChange}
-                placeholder="ID do número registrado"
+                placeholder="Ex: 1192131313973212"
                 className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition"
                 required
               />
             </div>
           </div>
 
-          {/* Business Token */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Business Token *
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Business Token *</label>
             <input
               type="password"
               name="businessToken"
@@ -240,12 +217,11 @@ export default function CreateProjectForm() {
               required
             />
             <p className="text-xs text-gray-500 mt-1">
-              Este token será criptografado e armazenado com segurança
+              Armazenado com segurança em servidor — nunca exposto ao navegador
             </p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            {/* Embedded Signup Config ID */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Embedded Signup Config ID (opcional)
@@ -259,8 +235,6 @@ export default function CreateProjectForm() {
                 className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition"
               />
             </div>
-
-            {/* Webhook Verify Token */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Webhook Verify Token (opcional)
@@ -276,7 +250,6 @@ export default function CreateProjectForm() {
             </div>
           </div>
 
-          {/* Botão Enviar */}
           <button
             type="submit"
             disabled={loading}

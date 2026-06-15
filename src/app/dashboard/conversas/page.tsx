@@ -9,6 +9,7 @@ import {
 import { toast } from 'sonner'
 import { useProject } from '@/lib/project-context'
 import EditProjectConfigModal from '@/components/EditProjectConfigModal'
+import { fetchApi } from '@/lib/api-client'
 
 type Message = {
   id: string
@@ -229,11 +230,10 @@ function ConversasInner() {
     setSendStatus('loading')
     setSendError('')
     try {
-      const res = await fetch('/api/meta/send-message', {
+      const res = await fetchApi('/api/meta/send-message', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          to: conv.number.replace(/\D/g, ''), 
+        body: JSON.stringify({
+          to: conv.number.replace(/\D/g, ''),
           message: msgText,
           projectId: currentProject?.id
         }),

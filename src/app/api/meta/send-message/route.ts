@@ -1,47 +1,36 @@
-import { cookies } from 'next/headers'
+import { requireAuth } from '@/lib/server-auth'
 import { sendTextMessage } from '@/lib/meta'
-import { getAuth } from 'firebase/auth'
-import { firestore } from '@/lib/firebase'
-import { doc, getDoc } from 'firebase/firestore'
 
-async function requireAuth() {
-  const store = await cookies()
-  return !!store.get('session')
-}
-
-/**
- * Busca configuração Meta do Firestore
- * Espera que o usuário tenha um projeto configurado
- */
 async function getMetaConfig(projectId: string) {
+  // 1. Tenta via Admin SDK (bypassa regras do Firestore)
   try {
-    const projectRef = doc(firestore, 'projects', projectId)
-    const projectSnap = await getDoc(projectRef)
-    
-    if (!projectSnap.exists()) {
-      throw new Error('Projeto não encontrado')
+    const { getAdminDb } = await import('@/lib/firebase-admin')
+    const db = getAdminDb()
+    const [projSnap, secSnap] = await Promise.all([
+      db.collection('projects').doc(projectId).get(),
+      db.collection('project_secrets').doc(projectId).get(),
+    ])
+    if (projSnap.exists) {
+      const waba = projSnap.data()?.waba
+      const phoneNumberId = waba?.PHONE_NUMBER_ID ?? waba?.phoneNumberId
+      const businessToken =
+        (secSnap.data() as { businessToken?: string })?.businessToken ??
+        waba?.BUSINESS_TOKEN ??
+        waba?.businessToken
+      if (phoneNumberId && businessToken) return { phoneNumberId: phoneNumberId as string, businessToken }
     }
+  } catch { /* Admin SDK não configurado */ }
 
-    const projectData = projectSnap.data()
-    const wabaConfig = projectData?.wabaConfig
+  // 2. Fallback para variáveis de ambiente
+  const phoneNumberId = process.env.META_PHONE_NUMBER_ID
+  const businessToken = process.env.META_BUSINESS_TOKEN
+  if (phoneNumberId && businessToken) return { phoneNumberId, businessToken }
 
-    if (!wabaConfig?.phoneNumberId || !wabaConfig?.businessToken) {
-      throw new Error('WABA não configurado. Contate o administrador.')
-    }
-
-    return {
-      phoneNumberId: wabaConfig.phoneNumberId,
-      businessToken: wabaConfig.businessToken,
-    }
-  } catch (error) {
-    throw new Error(
-      `Erro ao buscar configuração Meta do Firestore: ${error instanceof Error ? error.message : 'Erro desconhecido'}`
-    )
-  }
+  throw new Error('WABA não configurado. Configure as credenciais do projeto.')
 }
 
 export async function POST(request: Request) {
-  if (!(await requireAuth())) {
+  if (!(await requireAuth(request))) {
     return Response.json({ error: 'Não autorizado' }, { status: 401 })
   }
 
@@ -55,24 +44,23 @@ export async function POST(request: Request) {
   if (!body.to || !body.message) {
     return Response.json({ error: 'Campos "to" e "message" são obrigatórios' }, { status: 400 })
   }
-
   if (!body.projectId) {
     return Response.json({ error: 'Campo "projectId" é obrigatório' }, { status: 400 })
   }
 
   let phoneNumberId: string
   let businessToken: string
-
   try {
-    const metaConfig = await getMetaConfig(body.projectId)
-    phoneNumberId = metaConfig.phoneNumberId
-    businessToken = metaConfig.businessToken
+    const config = await getMetaConfig(body.projectId)
+    phoneNumberId = config.phoneNumberId
+    businessToken = config.businessToken
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Erro ao buscar configuração Meta'
-    return Response.json({ error: message }, { status: 503 })
+    return Response.json(
+      { error: error instanceof Error ? error.message : 'Erro ao buscar configuração Meta' },
+      { status: 503 }
+    )
   }
 
-  // Sanitiza o número: apenas dígitos
   const to = body.to.replace(/\D/g, '')
   if (to.length < 10) {
     return Response.json({ error: 'Número de telefone inválido' }, { status: 400 })
@@ -82,7 +70,9 @@ export async function POST(request: Request) {
     const result = await sendTextMessage(phoneNumberId, businessToken, to, body.message)
     return Response.json(result)
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Erro desconhecido'
-    return Response.json({ error: message }, { status: 502 })
+    return Response.json(
+      { error: err instanceof Error ? err.message : 'Erro desconhecido' },
+      { status: 502 }
+    )
   }
 }

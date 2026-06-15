@@ -2,10 +2,13 @@
 
 import { useState } from 'react'
 import { Send, CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
+import { useProject } from '@/lib/project-context'
+import { fetchApi } from '@/lib/api-client'
 
 type SendStatus = 'idle' | 'loading' | 'success' | 'error'
 
 export default function SendMessageForm() {
+  const { currentProject } = useProject()
   const [to, setTo] = useState('')
   const [message, setMessage] = useState('')
   const [status, setStatus] = useState<SendStatus>('idle')
@@ -15,20 +18,23 @@ export default function SendMessageForm() {
     e.preventDefault()
     if (!to || !message) return
 
+    if (!currentProject?.id) {
+      setStatus('error')
+      setFeedback('Nenhum projeto ativo. Selecione um projeto no menu lateral.')
+      return
+    }
+
     setStatus('loading')
     setFeedback('')
 
     try {
-      const res = await fetch('/api/meta/send-message', {
+      const res = await fetchApi('/api/meta/send-message', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to, message }),
+        body: JSON.stringify({ to, message, projectId: currentProject.id }),
       })
       const json = await res.json()
 
-      if (!res.ok) {
-        throw new Error(json.error ?? 'Erro ao enviar mensagem')
-      }
+      if (!res.ok) throw new Error(json.error ?? 'Erro ao enviar mensagem')
 
       setStatus('success')
       setFeedback(`Mensagem enviada! ID: ${json.messages?.[0]?.id ?? '—'}`)
@@ -70,7 +76,9 @@ export default function SendMessageForm() {
         </div>
 
         {feedback && (
-          <div className={`flex items-start gap-2 text-sm p-3 rounded-lg ${status === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+          <div className={`flex items-start gap-2 text-sm p-3 rounded-lg ${
+            status === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+          }`}>
             {status === 'success'
               ? <CheckCircle className="w-4 h-4 mt-0.5 shrink-0" />
               : <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />

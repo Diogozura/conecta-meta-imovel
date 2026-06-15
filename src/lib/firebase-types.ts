@@ -65,9 +65,14 @@ export interface Project extends FirebaseDocument {
     WEBHOOK_VERIFY_TOKEN: string;
   };
   waba?: {
-    WABA_ID: string;
+    WABA_ID?: string;
     PHONE_NUMBER_ID?: string;
-    BUSINESS_TOKEN?: string; // Criptografado
+    // Campos salvos pelo save-waba-credentials
+    wabaId?: string;
+    phoneNumberId?: string;
+    displayPhoneNumber?: string;
+    verifiedName?: string;
+    // BUSINESS_TOKEN removido — armazenado em project_secrets (somente server-side)
   };
   status: 'active' | 'inactive' | 'archived';
   createdAt: Date;

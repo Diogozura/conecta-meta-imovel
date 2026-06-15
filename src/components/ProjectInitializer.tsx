@@ -6,67 +6,79 @@ import { useProject } from '@/lib/project-context'
 import projectService from '@/lib/project-service'
 import CreateProjectForm from './CreateProjectForm'
 import { Loader2 } from 'lucide-react'
+import type { Project } from '@/lib/firebase-types'
 
-/**
- * Componente que verifica se há um projeto configurado.
- * Se não houver, mostra um formulário para criar um.
- * Se houver, renderiza os children normalmente.
- */
+const STORAGE_KEY = 'active_project_id'
+
 export default function ProjectInitializer({
   children,
-  allowCreateProject = true
+  allowCreateProject = true,
 }: {
   children: React.ReactNode
   allowCreateProject?: boolean
 }) {
-  const { user, userData, isAuthenticated, loading: authLoading } = useAuthContext()
-  const { currentProject } = useProject()
-  const [userProjects, setUserProjects] = useState<any[]>([])
+  const { user, isAuthenticated, loading: authLoading } = useAuthContext()
+  const { currentProject, setCurrentProject } = useProject()
+  const [userProjects, setUserProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Timeout de segurança: se passar de 7 segundos, força finalização do loading
   useEffect(() => {
-    if (loading) {
-      timeoutRef.current = setTimeout(() => {
-        console.warn('Timeout no carregamento do ProjectInitializer, finalizando loading')
-        setLoading(false)
-      }, 7000)
-    }
-
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current)
-      }
-    }
+    if (!loading) return
+    timeoutRef.current = setTimeout(() => {
+      console.warn('Timeout no ProjectInitializer')
+      setLoading(false)
+    }, 7000)
+    return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current) }
   }, [loading])
 
   useEffect(() => {
-    async function loadProjects() {
-      // Espera até que auth tenha terminado de carregar
-      if (authLoading) {
-        return
-      }
+    if (authLoading) return
 
+    async function loadProjects() {
       if (!isAuthenticated || !user) {
         setLoading(false)
         return
       }
-
       try {
-        const projects = await projectService.getUserProjects(user.uid)
+        // Busca projetos onde é owner E onde é colaborador
+        const [owned, collaborated] = await Promise.all([
+          projectService.getUserProjects(user.uid),
+          projectService.getCollaboratorProjects(user.uid),
+        ])
+        // Merge sem duplicatas pelo ID
+        const seen = new Set<string>()
+        const projects = [...owned, ...collaborated].filter(p => {
+          if (!p.id || seen.has(p.id)) return false
+          seen.add(p.id)
+          return true
+        })
+
         setUserProjects(projects)
-      } catch (error) {
-        console.error('Erro ao carregar projetos:', error)
+
+        if (projects.length > 0) {
+          const savedId = localStorage.getItem(STORAGE_KEY)
+          const toActivate = projects.find(p => p.id === savedId) ?? projects[0]
+          setCurrentProject(toActivate)
+        }
+      } catch (err) {
+        console.error('Erro ao carregar projetos:', err)
       } finally {
         setLoading(false)
       }
     }
 
     loadProjects()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, user, authLoading])
 
-  // Ainda carregando
+  // Persiste a seleção no localStorage sempre que o projeto ativo muda
+  useEffect(() => {
+    if (currentProject?.id) {
+      localStorage.setItem(STORAGE_KEY, currentProject.id)
+    }
+  }, [currentProject?.id])
+
   if (loading || authLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -78,7 +90,16 @@ export default function ProjectInitializer({
     )
   }
 
-  
-  // Há projetos - renderizar conteúdo normal
+  if (allowCreateProject && userProjects.length === 0 && !currentProject) {
+    return (
+      <div className="flex items-center justify-center min-h-screen p-6">
+        <div className="w-full max-w-md">
+          <h2 className="text-xl font-semibold mb-4 text-gray-800">Crie seu primeiro projeto</h2>
+          <CreateProjectForm />
+        </div>
+      </div>
+    )
+  }
+
   return <>{children}</>
 }

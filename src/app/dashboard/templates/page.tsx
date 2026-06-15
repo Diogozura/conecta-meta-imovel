@@ -1,18 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Plus, FileText, RefreshCw, Loader2, CheckCircle, AlertCircle } from 'lucide-react'
+import { useProject } from '@/lib/project-context'
+import { fetchApi } from '@/lib/api-client'
 
 type Category = 'MARKETING' | 'UTILITY' | 'AUTHENTICATION'
 type SaveStatus = 'idle' | 'loading' | 'success' | 'error'
-
-interface MetaTemplate {
-  id: string
-  name: string
-  status: string
-  category: string
-  language: string
-}
 
 const categoryOptions: { value: Category; label: string }[] = [
   { value: 'UTILITY', label: 'Utilidade' },
@@ -37,6 +31,8 @@ const statusLabels: Record<string, string> = {
 }
 
 export default function TemplatesPage() {
+  const { currentProject, templates, templatesLoading, refreshTemplates } = useProject()
+
   const [name, setName] = useState('')
   const [category, setCategory] = useState<Category>('UTILITY')
   const [language, setLanguage] = useState('pt_BR')
@@ -46,36 +42,20 @@ export default function TemplatesPage() {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [feedback, setFeedback] = useState('')
 
-  const [templates, setTemplates] = useState<MetaTemplate[]>([])
-  const [loadingList, setLoadingList] = useState(false)
-  const [listError, setListError] = useState('')
-
-  async function fetchTemplates() {
-    setLoadingList(true)
-    setListError('')
-    try {
-      const res = await fetch('/api/meta/list-templates')
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error)
-      setTemplates(json.templates ?? [])
-    } catch (err) {
-      setListError(err instanceof Error ? err.message : 'Erro ao carregar templates')
-    } finally {
-      setLoadingList(false)
-    }
-  }
-
-  useEffect(() => { fetchTemplates() }, [])
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!currentProject?.id) {
+      setSaveStatus('error')
+      setFeedback('Nenhum projeto ativo. Selecione um projeto.')
+      return
+    }
+
     setSaveStatus('loading')
     setFeedback('')
     try {
-      const res = await fetch('/api/meta/create-template', {
+      const res = await fetchApi('/api/meta/create-template', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, category, language, header, bodyText, footer }),
+        body: JSON.stringify({ name, category, language, header, bodyText, footer, projectId: currentProject.id }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error)
@@ -85,7 +65,7 @@ export default function TemplatesPage() {
       setHeader('')
       setBodyText('')
       setFooter('')
-      fetchTemplates()
+      await refreshTemplates()
     } catch (err) {
       setSaveStatus('error')
       setFeedback(err instanceof Error ? err.message : 'Erro desconhecido')
@@ -94,23 +74,21 @@ export default function TemplatesPage() {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold text-gray-900">Templates de Mensagem</h2>
           <p className="text-sm text-gray-500">Crie e gerencie modelos aprovados pelo Meta</p>
         </div>
         <button
-          onClick={fetchTemplates}
-          disabled={loadingList}
+          onClick={refreshTemplates}
+          disabled={templatesLoading}
           className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
         >
-          <RefreshCw className={`w-4 h-4 ${loadingList ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-4 h-4 ${templatesLoading ? 'animate-spin' : ''}`} />
           Atualizar lista
         </button>
       </div>
 
-      {/* Create form */}
       <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
         <h3 className="font-semibold text-gray-800 text-sm flex items-center gap-2">
           <Plus className="w-4 h-4 text-green-600" />
@@ -180,7 +158,7 @@ export default function TemplatesPage() {
               onChange={(e) => setBodyText(e.target.value)}
               required
               rows={4}
-              placeholder={"Olá, {{1}}! Seja bem-vindo(a) à nossa plataforma. Em caso de dúvidas, entre em contato."}
+              placeholder="Olá, {{1}}! Seja bem-vindo(a) à nossa plataforma."
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-400 resize-none"
             />
           </div>
@@ -197,7 +175,9 @@ export default function TemplatesPage() {
           </div>
 
           {feedback && (
-            <div className={`flex items-start gap-2 text-sm p-3 rounded-lg ${saveStatus === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+            <div className={`flex items-start gap-2 text-sm p-3 rounded-lg ${
+              saveStatus === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+            }`}>
               {saveStatus === 'success'
                 ? <CheckCircle className="w-4 h-4 mt-0.5 shrink-0" />
                 : <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
@@ -220,25 +200,17 @@ export default function TemplatesPage() {
         </form>
       </div>
 
-      {/* Template list */}
       <div className="space-y-3">
         <h3 className="font-semibold text-gray-800 text-sm">Templates no Meta</h3>
 
-        {listError && (
-          <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            {listError}
-          </div>
-        )}
-
-        {loadingList && (
+        {templatesLoading && (
           <div className="flex items-center gap-2 py-8 justify-center text-gray-400 text-sm">
             <Loader2 className="w-4 h-4 animate-spin" />
             Carregando templates...
           </div>
         )}
 
-        {!loadingList && templates.length === 0 && !listError && (
+        {!templatesLoading && templates.length === 0 && (
           <div className="py-12 text-center text-gray-400 text-sm bg-white rounded-xl border border-gray-200">
             Nenhum template encontrado. Crie o primeiro acima.
           </div>

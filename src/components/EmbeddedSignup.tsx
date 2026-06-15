@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { CheckCircle, Loader2, XCircle } from 'lucide-react'
+import { fetchApi } from '@/lib/api-client'
 
 declare global {
   interface Window {
@@ -112,9 +113,8 @@ export default function EmbeddedSignup({ onSuccess }: EmbeddedSignupProps) {
           setStep(1, { status: 'loading' })
           let accessToken: string
           try {
-            const res = await fetch('/api/meta/exchange-token', {
+            const res = await fetchApi('/api/meta/exchange-token', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ code }),
             })
             const json = await res.json()
@@ -130,9 +130,8 @@ export default function EmbeddedSignup({ onSuccess }: EmbeddedSignupProps) {
           setStep(2, { status: 'loading' })
           const phoneNumberId = phoneNumberIdRef.current
           try {
-            const res = await fetch('/api/meta/register-phone', {
+            const res = await fetchApi('/api/meta/register-phone', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ phoneNumberId, accessToken }),
             })
             const json = await res.json()
@@ -147,9 +146,8 @@ export default function EmbeddedSignup({ onSuccess }: EmbeddedSignupProps) {
           setStep(3, { status: 'loading' })
           const wabaId = wabaIdRef.current
           try {
-            const res = await fetch('/api/meta/subscribe-webhooks', {
+            const res = await fetchApi('/api/meta/subscribe-webhooks', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ wabaId, accessToken }),
             })
             const json = await res.json()
