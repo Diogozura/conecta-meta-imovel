@@ -171,7 +171,7 @@ export default function EmbeddedSignup({ onSuccess }: EmbeddedSignupProps) {
             } catch { /* ignora */ }
           }
 
-          // Fallback C: busca phone_number_id dentro da WABA
+          // Fallback C: busca phone_number_id dentro da conta WhatsApp Business
           if (!phoneNumberId && wabaId) {
             try {
               const r = await fetch(
@@ -200,20 +200,10 @@ export default function EmbeddedSignup({ onSuccess }: EmbeddedSignupProps) {
             detail: `WABA: ${wabaId}${phoneNumberId ? ` · Telefone ID: ${phoneNumberId}` : ''}`,
           })
 
-          // Passo 3: assinar webhooks
-          setStep(3, { status: 'loading' })
-          try {
-            const res = await fetchApi('/api/meta/subscribe-webhooks', {
-              method: 'POST',
-              body: JSON.stringify({ wabaId, accessToken }),
-            })
-            const json = await res.json()
-            if (!res.ok) throw new Error(json.error)
-            setStep(3, { status: 'done', detail: `WABA ${wabaId} inscrita nos webhooks.` })
-          } catch (err) {
-            setStep(3, { status: 'error', detail: String(err) })
-            return
-          }
+          // Passo 3 (CoEx): webhook configurado globalmente no App Dashboard da Meta.
+          // Não chamamos /subscribed_apps por cliente — a Meta bloqueia esse endpoint
+          // para contas compartilhadas de Solution Providers sem permissão administrativa.
+          setStep(3, { status: 'done', detail: 'Configuração de webhook gerenciada pelo sistema.' })
 
           onSuccess?.({ wabaId, phoneNumberId, accessToken })
         })()
