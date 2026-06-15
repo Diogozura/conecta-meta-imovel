@@ -137,12 +137,29 @@ export default function EmbeddedSignup({ onSuccess }: EmbeddedSignupProps) {
           // Passo 2: registrar número
           setStep(2, { status: 'loading' })
           let phoneNumberId = phoneNumberIdRef.current
-          const wabaId = wabaIdRef.current
+          let wabaId = wabaIdRef.current
+          const graphVersion = process.env.NEXT_PUBLIC_META_GRAPH_API_VERSION ?? 'v21.0'
 
-          // Fallback: se o evento FINISH não chegou, busca o número via API do Meta
+          // Fallback 1: se o evento FINISH não trouxe waba_id, busca via Graph API
+          if (!wabaId) {
+            try {
+              const wabasRes = await fetch(
+                `https://graph.facebook.com/${graphVersion}/me/whatsapp_business_accounts?access_token=${accessToken}`
+              )
+              if (wabasRes.ok) {
+                const wabasData = await wabasRes.json()
+                const firstWaba = wabasData.data?.[0]?.id
+                if (firstWaba) {
+                  wabaId = firstWaba
+                  wabaIdRef.current = firstWaba
+                }
+              }
+            } catch { /* fallback silencioso */ }
+          }
+
+          // Fallback 2: se o evento FINISH não trouxe phone_number_id, busca via WABA
           if (!phoneNumberId && wabaId) {
             try {
-              const graphVersion = process.env.NEXT_PUBLIC_META_GRAPH_API_VERSION ?? 'v21.0'
               const phonesRes = await fetch(
                 `https://graph.facebook.com/${graphVersion}/${wabaId}/phone_numbers?access_token=${accessToken}`
               )
@@ -202,8 +219,7 @@ export default function EmbeddedSignup({ onSuccess }: EmbeddedSignupProps) {
         override_default_response_type: true,
         extras: {
           setup: {},
-          featureType: '',
-          sessionInfoVersion: '3',
+          sessionInfoVersion: 3,
         },
       },
     )
