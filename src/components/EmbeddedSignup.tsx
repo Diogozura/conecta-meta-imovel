@@ -147,6 +147,35 @@ export default function EmbeddedSignup({ onSuccess }: EmbeddedSignupProps) {
           let fallbackWabaError = ''
           let fallbackPhoneError = ''
           if (!wabaId) {
+            // Log de diagnóstico: o que o token tem acesso?
+            try {
+              const meRes = await fetch(`https://graph.facebook.com/${graphVersion}/me?fields=id,name&access_token=${accessToken}`)
+              console.log('[EmbeddedSignup] /me:', JSON.stringify(await meRes.json()))
+            } catch (e) { console.log('[EmbeddedSignup] /me erro:', e) }
+
+            try {
+              const bizRes = await fetch(`https://graph.facebook.com/${graphVersion}/me/businesses?access_token=${accessToken}`)
+              console.log('[EmbeddedSignup] /me/businesses:', JSON.stringify(await bizRes.json()))
+            } catch (e) { console.log('[EmbeddedSignup] /me/businesses erro:', e) }
+
+            try {
+              const debugRes = await fetchApi('/api/meta/debug-token', {
+                method: 'POST',
+                body: JSON.stringify({ accessToken }),
+              })
+              const debugData = await debugRes.json()
+              console.log('[EmbeddedSignup] debug_token completo:', JSON.stringify(debugData))
+              // granular_scopes mostra os WABA IDs associados a esse token
+              const scopes: Array<{ scope: string; target_ids?: string[] }> = debugData?.data?.granular_scopes ?? []
+              console.log('[EmbeddedSignup] granular_scopes:', JSON.stringify(scopes))
+              const wabaScopeIds = scopes.find(s => s.scope === 'whatsapp_business_management')?.target_ids ?? []
+              console.log('[EmbeddedSignup] WABA IDs via granular_scopes:', wabaScopeIds)
+              if (!wabaId && wabaScopeIds.length > 0) {
+                wabaId = wabaScopeIds[0]
+                wabaIdRef.current = wabaId
+              }
+            } catch (e) { console.log('[EmbeddedSignup] debug_token erro:', e) }
+
             try {
               const wabasRes = await fetch(
                 `https://graph.facebook.com/${graphVersion}/me/whatsapp_business_accounts?access_token=${accessToken}`
