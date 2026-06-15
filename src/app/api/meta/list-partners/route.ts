@@ -71,6 +71,11 @@ export interface MetaPartner {
 async function fetchPartners(businessId: string, token: string): Promise<{ partners: MetaPartner[]; endpoint: string }> {
   const candidates = [
     {
+      edge: 'partners',
+      url: `${GRAPH}/${businessId}/partners?fields=id,name,profile_picture_uri&limit=50&access_token=${token}`,
+      map: (b: Record<string, string>): MetaPartner => ({ id: b.id, name: b.name, picture: b.profile_picture_uri, type: 'partner' }),
+    },
+    {
       edge: 'client_businesses',
       url: `${GRAPH}/${businessId}/client_businesses?fields=id,name,profile_picture_uri,created_time&limit=50&access_token=${token}`,
       map: (b: Record<string, string>): MetaPartner => ({ id: b.id, name: b.name, picture: b.profile_picture_uri, created_time: b.created_time, type: 'business' }),
