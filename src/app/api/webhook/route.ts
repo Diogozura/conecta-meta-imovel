@@ -2,6 +2,29 @@ import { createHmac } from 'crypto'
 import { getAdminDb } from '@/lib/firebase-admin'
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 
+// URL do Webhook node no n8n — configure em .env.local
+const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL ?? ''
+
+async function forwardToN8n(payload: unknown): Promise<void> {
+  if (!N8N_WEBHOOK_URL) return
+  const secretToken = process.env.N8N_WEBHOOK_SECRET_TOKEN
+  try {
+    const response = await fetch(N8N_WEBHOOK_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(secretToken ? { 'X-Webhook-Token': secretToken } : {}),
+      },
+      body: JSON.stringify(payload),
+    })
+    if (!response.ok) {
+      console.error(`[Webhook→n8n] HTTP ${response.status}`)
+    }
+  } catch (err) {
+    console.error('[Webhook→n8n] Erro ao encaminhar:', err)
+  }
+}
+
 /* ─── GET: verificação do endpoint pelo Meta ─────────────────────────────── */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -39,8 +62,11 @@ export async function POST(request: Request) {
     return new Response('OK', { status: 200 })
   }
 
-  // Processa cada entry sem bloquear a resposta ao Meta (max 20s timeout)
-  await Promise.allSettled(payload.entry.map(processEntry))
+  // Processa Firestore e retransmite ao n8n em paralelo
+  await Promise.allSettled([
+    ...payload.entry.map(processEntry),
+    forwardToN8n(payload),
+  ])
 
   return new Response('OK', { status: 200 })
 }
