@@ -13,12 +13,19 @@ export async function POST(request: Request) {
     return Response.json({ error: 'Body inválido' }, { status: 400 })
   }
 
-  if (!body.phoneNumberId || !body.accessToken) {
-    return Response.json({ error: 'Campos "phoneNumberId" e "accessToken" são obrigatórios' }, { status: 400 })
+  if (!body.phoneNumberId) {
+    return Response.json({ error: 'Campo "phoneNumberId" é obrigatório' }, { status: 400 })
+  }
+
+  // Usa o System User Token do Tech Provider — o user token do Embedded Signup
+  // não tem permissão para registrar números em WABAs de clientes.
+  const businessToken = process.env.META_BUSINESS_TOKEN
+  if (!businessToken) {
+    return Response.json({ error: 'META_BUSINESS_TOKEN não configurado no servidor' }, { status: 500 })
   }
 
   try {
-    const result = await registerPhoneNumber(body.phoneNumberId, body.accessToken, body.pin)
+    const result = await registerPhoneNumber(body.phoneNumberId, businessToken, body.pin)
     return Response.json(result)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
