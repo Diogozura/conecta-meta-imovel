@@ -2,10 +2,31 @@ import { createHmac } from 'crypto'
 import { getAdminDb } from '@/lib/firebase-admin'
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 
-// URL do Webhook node no n8n — configure em .env.local
+// ── n8n forward ───────────────────────────────────────────────────────────────
+
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL ?? ''
 
-async function forwardToN8n(payload: unknown): Promise<void> {
+// Payload plano enviado ao n8n — um evento por mensagem/status, sem aninhamento Meta.
+interface N8nPayload {
+  event: 'message_received' | 'message_status_update'
+  projectId: string
+  wabaId: string
+  phoneNumberId: string
+  // Campos de mensagem recebida
+  from: string
+  contactName: string
+  messageId: string
+  messageType: string
+  text: string | null
+  mediaId: string | null
+  mediaType: string | null
+  timestamp: string
+  // Campos exclusivos de status
+  deliveryStatus?: string
+  recipientId?: string
+}
+
+async function forwardToN8n(payload: N8nPayload): Promise<void> {
   if (!N8N_WEBHOOK_URL) return
   const secretToken = process.env.N8N_WEBHOOK_SECRET_TOKEN
   try {
@@ -22,6 +43,56 @@ async function forwardToN8n(payload: unknown): Promise<void> {
     }
   } catch (err) {
     console.error('[Webhook→n8n] Erro ao encaminhar:', err)
+  }
+}
+
+function buildMessagePayload(
+  projectId: string,
+  wabaId: string,
+  phoneNumberId: string,
+  value: WebhookValue,
+  msg: WebhookMessage,
+): N8nPayload {
+  const mediaId =
+    msg.image?.id ?? msg.audio?.id ?? msg.video?.id ?? msg.document?.id ?? msg.sticker?.id ?? null
+
+  return {
+    event: 'message_received',
+    projectId,
+    wabaId,
+    phoneNumberId,
+    from: msg.from,
+    contactName: value.contacts?.[0]?.profile?.name ?? msg.from,
+    messageId: msg.id,
+    messageType: msg.type,
+    text: msg.text?.body ?? null,
+    mediaId,
+    mediaType: msg.type !== 'text' ? msg.type : null,
+    timestamp: new Date(parseInt(msg.timestamp) * 1000).toISOString(),
+  }
+}
+
+function buildStatusPayload(
+  projectId: string,
+  wabaId: string,
+  phoneNumberId: string,
+  status: WebhookStatus,
+): N8nPayload {
+  return {
+    event: 'message_status_update',
+    projectId,
+    wabaId,
+    phoneNumberId,
+    from: status.recipient_id,
+    contactName: status.recipient_id,
+    messageId: status.id,
+    messageType: 'status',
+    text: null,
+    mediaId: null,
+    mediaType: null,
+    timestamp: new Date(parseInt(status.timestamp) * 1000).toISOString(),
+    deliveryStatus: status.status,
+    recipientId: status.recipient_id,
   }
 }
 
@@ -62,11 +133,7 @@ export async function POST(request: Request) {
     return new Response('OK', { status: 200 })
   }
 
-  // Processa Firestore e retransmite ao n8n em paralelo
-  await Promise.allSettled([
-    ...payload.entry.map(processEntry),
-    forwardToN8n(payload),
-  ])
+  await Promise.allSettled(payload.entry.map(processEntry))
 
   return new Response('OK', { status: 200 })
 }
@@ -85,11 +152,21 @@ async function processEntry(entry: WebhookEntry) {
       continue
     }
 
-    const { projectId } = lookupSnap.data() as { projectId: string }
+    const { projectId, wabaId } = lookupSnap.data() as { projectId: string; wabaId: string }
 
     await Promise.allSettled([
-      ...( value.messages ?? []).map(msg => processIncomingMessage(projectId, phoneNumberId, value, msg)),
-      ...(value.statuses ?? []).map(status => processMessageStatus(projectId, status)),
+      ...(value.messages ?? []).map(msg =>
+        Promise.allSettled([
+          processIncomingMessage(projectId, phoneNumberId, value, msg),
+          forwardToN8n(buildMessagePayload(projectId, wabaId, phoneNumberId, value, msg)),
+        ]),
+      ),
+      ...(value.statuses ?? []).map(status =>
+        Promise.allSettled([
+          processMessageStatus(projectId, status),
+          forwardToN8n(buildStatusPayload(projectId, wabaId, phoneNumberId, status)),
+        ]),
+      ),
     ])
   }
 }

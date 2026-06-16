@@ -68,7 +68,7 @@ export interface MetaPartner {
 }
 
 // Tenta endpoints em ordem até um funcionar
-async function fetchPartners(businessId: string, token: string): Promise<{ partners: MetaPartner[]; endpoint: string }> {
+async function fetchPartners(businessId: string, token: string): Promise<{ partners: MetaPartner[]; endpoint: string; permissionDenied?: boolean }> {
   const candidates = [
     {
       edge: 'partners',
@@ -93,6 +93,7 @@ async function fetchPartners(businessId: string, token: string): Promise<{ partn
   ]
 
   let lastError = 'Nenhum endpoint retornou dados.'
+  let lastErrorCode: number | null = null
 
   for (const candidate of candidates) {
     const res = await fetch(candidate.url)
@@ -106,6 +107,12 @@ async function fetchPartners(businessId: string, token: string): Promise<{ partn
     }
 
     lastError = json?.error?.message ?? lastError
+    lastErrorCode = json?.error?.code ?? lastErrorCode
+  }
+
+  // Erro #200 = permissão insuficiente; retorna vazio sem quebrar o fluxo
+  if (lastErrorCode === 200) {
+    return { partners: [], endpoint: 'permission_denied', permissionDenied: true }
   }
 
   throw new Error(lastError)
@@ -123,11 +130,15 @@ export async function GET(request: Request) {
   try {
     const { wabaId, businessToken } = await getProjectCredentials(projectId)
     const businessId = await resolveBusinessId(wabaId, businessToken)
-    const { partners, endpoint } = await fetchPartners(businessId, businessToken)
+    const { partners, endpoint, permissionDenied } = await fetchPartners(businessId, businessToken)
 
-    return Response.json({ partners, businessId, endpoint })
+    return Response.json({ partners, businessId, endpoint, permissionDenied: permissionDenied ?? false })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
+    // Se o próprio resolveBusinessId falhar por falta de permissão (#200), retorna graciosamente
+    if (message.includes('#200') || message.includes('business_management')) {
+      return Response.json({ partners: [], businessId: null, endpoint: null, permissionDenied: true })
+    }
     return Response.json({ error: message }, { status: 502 })
   }
 }

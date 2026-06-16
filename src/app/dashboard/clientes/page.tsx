@@ -5,9 +5,11 @@ import { Search, Copy, Check, Webhook, Hash, Building2, CheckCircle2, AlertCircl
 import { useAuth } from '@/lib/use-auth'
 import { useProject } from '@/lib/project-context'
 import projectService from '@/lib/project-service'
-import EmbeddedSignup from '@/components/EmbeddedSignup'
+import PopupSignup, { type MetaSignupResult } from '@/components/PopupSignup'
 import { fetchApi } from '@/lib/api-client'
 import type { Project } from '@/lib/firebase-types'
+
+// ── Types ────────────────────────────────────────────────────────────────────
 
 interface MetaPartner {
   id: string
@@ -15,6 +17,8 @@ interface MetaPartner {
   picture?: string
   created_time?: string
 }
+
+type ModalStep = 'signup' | 'success'
 
 // ── Copy button ──────────────────────────────────────────────────────────────
 function CopyButton({ value }: { value: string }) {
@@ -96,13 +100,20 @@ function MetaPartnersPanel({ projectId }: { projectId: string }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [businessId, setBusinessId] = useState<string | null>(null)
+  const [permissionDenied, setPermissionDenied] = useState(false)
 
   async function fetch() {
     setLoading(true)
     setError(null)
+    setPermissionDenied(false)
     try {
       const res = await fetchApi(`/api/meta/list-partners?projectId=${projectId}`)
       const json = await res.json()
+      if (json.permissionDenied) {
+        setPermissionDenied(true)
+        setOpen(false)
+        return
+      }
       if (!res.ok) throw new Error(json.error ?? 'Erro ao buscar parceiros')
       setPartners(json.partners ?? [])
       setBusinessId(json.businessId ?? null)
@@ -128,14 +139,16 @@ function MetaPartnersPanel({ projectId }: { projectId: string }) {
           <div className="text-left">
             <p className="text-sm font-semibold text-gray-900">Parceiros no Meta</p>
             <p className="text-xs text-gray-500">
-              {partners.length > 0
-                ? `${partners.length} parceiro${partners.length !== 1 ? 's' : ''} encontrado${partners.length !== 1 ? 's' : ''}`
-                : 'Clique para buscar os parceiros vinculados no Meta Business Manager'}
+              {permissionDenied
+                ? 'Permissão insuficiente — token sem business_management'
+                : partners.length > 0
+                  ? `${partners.length} parceiro${partners.length !== 1 ? 's' : ''} encontrado${partners.length !== 1 ? 's' : ''}`
+                  : 'Clique para buscar os parceiros vinculados no Meta Business Manager'}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {(partners.length > 0 || error) && (
+          {(partners.length > 0 || error || permissionDenied) && (
             <button
               onClick={e => { e.stopPropagation(); void fetch() }}
               className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
@@ -194,76 +207,44 @@ function MetaPartnersPanel({ projectId }: { projectId: string }) {
 }
 
 // ── Connect Meta modal ───────────────────────────────────────────────────────
-type SaveStatus = 'idle' | 'saving' | 'success' | 'error'
-
 function ConnectMetaModal({ onClose, onConnected }: { onClose: () => void; onConnected: () => void }) {
   const { currentProject } = useProject()
-  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+  const [step, setStep] = useState<ModalStep>('signup')
   const [errorMsg, setErrorMsg] = useState('')
-  const [savedData, setSavedData] = useState<{ wabaId: string; displayPhone: string } | null>(null)
+  const [savedData, setSavedData] = useState<MetaSignupResult | null>(null)
 
-  async function handleSuccess(data: { wabaId: string; phoneNumberId: string; accessToken: string }) {
-    if (!currentProject?.id) {
-      setErrorMsg('Nenhum projeto ativo. Selecione um projeto antes de conectar.')
-      setSaveStatus('error')
-      return
-    }
-    setSaveStatus('saving')
-    setErrorMsg('')
-    try {
-      const phoneRes = await fetch(
-        `https://graph.facebook.com/${process.env.NEXT_PUBLIC_META_GRAPH_API_VERSION}/${data.phoneNumberId}` +
-        `?fields=display_phone_number,verified_name&access_token=${data.accessToken}`
-      )
-      const phoneData = await phoneRes.json()
-      const displayPhoneNumber = phoneData.display_phone_number ?? ''
-      const verifiedName = phoneData.verified_name ?? ''
-
-      const res = await fetchApi('/api/meta/save-waba-credentials', {
-        method: 'POST',
-        body: JSON.stringify({
-          projectId: currentProject.id,
-          wabaId: data.wabaId,
-          phoneNumberId: data.phoneNumberId,
-          displayPhoneNumber,
-          verifiedName,
-          businessToken: data.accessToken,
-        }),
-      })
-      if (!res.ok) {
-        const json = await res.json()
-        throw new Error(json.error ?? 'Erro ao salvar credenciais')
-      }
-      setSavedData({ wabaId: data.wabaId, displayPhone: displayPhoneNumber || data.phoneNumberId })
-      setSaveStatus('success')
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Erro desconhecido')
-      setSaveStatus('error')
-    }
+  function handleSuccess(data: MetaSignupResult) {
+    // O callback server-side já salvou no Firestore — basta atualizar a UI
+    setSavedData(data)
+    setStep('success')
   }
 
   function handleDone() {
-    onConnected()
+    onConnected() // dispara refresh da lista de projetos
     onClose()
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-        {/* Modal header */}
+        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h3 className="font-semibold text-gray-900">Conectar com Meta</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+          >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         <div className="px-6 py-5 space-y-4">
-          {/* Project indicator */}
+          {/* Indicador de projeto — sempre visível */}
           {currentProject ? (
             <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 rounded-lg px-3 py-2">
               <Building2 className="w-4 h-4 text-gray-400 shrink-0" />
-              Projeto ativo: <span className="font-medium text-gray-900">{currentProject.name}</span>
+              Projeto ativo:{' '}
+              <span className="font-medium text-gray-900">{currentProject.name}</span>
             </div>
           ) : (
             <div className="flex items-center gap-2 text-sm text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
@@ -272,44 +253,65 @@ function ConnectMetaModal({ onClose, onConnected }: { onClose: () => void; onCon
             </div>
           )}
 
-          {/* Success state */}
-          {saveStatus === 'success' && savedData ? (
+          {/* ── Passo: sucesso ── */}
+          {step === 'success' && savedData && (
             <div className="space-y-4">
-              <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-2">
+              <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-2.5">
                 <div className="flex items-center gap-2">
                   <CheckCircle className="w-4 h-4 text-green-600" />
-                  <p className="text-sm font-semibold text-green-800">Conta conectada com sucesso!</p>
+                  <p className="text-sm font-semibold text-green-800">
+                    Conta conectada com sucesso!
+                  </p>
                 </div>
-                <p className="text-xs text-green-700"><span className="font-medium">WABA ID:</span> {savedData.wabaId}</p>
-                <p className="text-xs text-green-700"><span className="font-medium">Número:</span> {savedData.displayPhone}</p>
+                <div className="space-y-1.5 pl-6">
+                  {savedData.verifiedName && (
+                    <p className="text-xs text-green-700">
+                      <span className="font-medium">Empresa:</span> {savedData.verifiedName}
+                    </p>
+                  )}
+                  <p className="text-xs text-green-700">
+                    <span className="font-medium">WABA ID:</span>{' '}
+                    <span className="font-mono">{savedData.wabaId}</span>
+                  </p>
+                  {savedData.displayPhoneNumber && (
+                    <p className="text-xs text-green-700">
+                      <span className="font-medium">Número:</span> {savedData.displayPhoneNumber}
+                    </p>
+                  )}
+                </div>
               </div>
-              <button onClick={handleDone} className="w-full px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors">
+              <button
+                onClick={handleDone}
+                className="w-full px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
+              >
                 Concluir
               </button>
             </div>
-          ) : (
-            <div className="space-y-4">
-              <p className="text-sm text-gray-600">
-                Clique no botão abaixo. Uma janela do Facebook será aberta para você autorizar o acesso ao seu
-                WhatsApp Business Account (WABA). Ao finalizar, o sistema automaticamente troca o token,
-                registra o número e assina os webhooks.
-              </p>
+          )}
 
-              {saveStatus === 'saving' && (
-                <div className="flex items-center gap-2 text-sm text-blue-600">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Salvando credenciais no projeto...
-                </div>
+          {/* ── Passo: signup via popup ── */}
+          {step === 'signup' && (
+            <div className="space-y-4">
+              {!currentProject && (
+                <p className="text-xs text-gray-400 italic">
+                  Selecione um projeto acima antes de prosseguir.
+                </p>
               )}
 
-              {saveStatus === 'error' && (
+              {errorMsg && (
                 <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 rounded-lg p-3">
                   <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
                   {errorMsg}
                 </div>
               )}
 
-              <EmbeddedSignup onSuccess={handleSuccess} />
+              {currentProject?.id && (
+                <PopupSignup
+                  projectId={currentProject.id}
+                  onSuccess={handleSuccess}
+                  onError={setErrorMsg}
+                />
+              )}
             </div>
           )}
         </div>
@@ -355,7 +357,7 @@ export default function ClientesPage() {
   const filtered = projects.filter(p =>
     p.name.toLowerCase().includes(search.toLowerCase()) ||
     (p.waba?.WABA_ID ?? p.waba?.wabaId ?? '').includes(search) ||
-    (p.waba?.PHONE_NUMBER_ID ?? p.waba?.phoneNumberId ?? '').includes(search)
+    (p.waba?.PHONE_NUMBER_ID ?? p.waba?.phoneNumberId ?? '').includes(search),
   )
 
   const isLoading = authLoading || loading
