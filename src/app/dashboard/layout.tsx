@@ -58,7 +58,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { user, userData } = useAuthContext()
   const { isAdmin } = useRole()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [selectedProject, setSelectedProject] = useState<string>('')
 
   const handleLogout = async () => {
     try {
@@ -138,10 +137,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           {/* Project Selector */}
           <div className="px-3">
-            <ProjectSelector
-              currentProjectId={selectedProject}
-              onProjectChange={setSelectedProject}
-            />
+            <ProjectSelector />
           </div>
 
           {/* User info */}
