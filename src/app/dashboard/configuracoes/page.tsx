@@ -241,6 +241,7 @@ function ConnectPanel({
           displayPhoneNumber,
           verifiedName,
           businessToken: data.accessToken,
+          tryTokenExchange: true,
         }),
       })
 

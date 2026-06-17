@@ -60,6 +60,7 @@ export default function OnboardingPage() {
           displayPhoneNumber,
           verifiedName,
           businessToken: data.accessToken,
+          tryTokenExchange: true,
         }),
       })
 
