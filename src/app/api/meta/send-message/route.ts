@@ -134,8 +134,15 @@ export async function POST(request: Request) {
     )
     return Response.json(result)
   } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Erro desconhecido'
+    // Erro #10 = token sem permissão whatsapp_business_messaging
+    const isPermissionError = msg.includes('(#10)') || msg.includes('granular permission')
     return Response.json(
-      { error: err instanceof Error ? err.message : 'Erro desconhecido' },
+      {
+        error: isPermissionError
+          ? 'Token sem permissão para envio de mensagens (#10). Acesse Configurações → projeto → "Atualizar Token" e cole um System User Token com escopo whatsapp_business_messaging.'
+          : msg,
+      },
       { status: 502 }
     )
   }

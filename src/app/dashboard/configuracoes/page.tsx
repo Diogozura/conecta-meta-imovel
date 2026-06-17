@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import {
   Settings, Plus, CheckCircle2, AlertCircle, Loader2,
-  Phone, Building2, X, ChevronRight, CheckCircle, Wifi,
+  Phone, Building2, X, ChevronRight, CheckCircle, Wifi, KeyRound,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuthContext } from '@/lib/auth-context'
@@ -34,71 +34,158 @@ function ProjectCard({
   onConnect: () => void
 }) {
   const hasWaba = !!(project.waba?.wabaId || project.waba?.WABA_ID)
-  const phoneNumber = project.waba?.displayPhoneNumber || project.waba?.PHONE_NUMBER_ID || '—'
+  const wabaId = project.waba?.wabaId || project.waba?.WABA_ID || ''
+  const phoneNumberId = project.waba?.phoneNumberId || project.waba?.PHONE_NUMBER_ID || ''
+  const phoneNumber = project.waba?.displayPhoneNumber || phoneNumberId || '—'
   const verifiedName = project.waba?.verifiedName || '—'
+
+  const [showTokenForm, setShowTokenForm] = useState(false)
+  const [newToken, setNewToken] = useState('')
+  const [updatingToken, setUpdatingToken] = useState(false)
+
+  async function handleUpdateToken(e: React.FormEvent) {
+    e.preventDefault()
+    if (!newToken.trim() || !project.id) return
+    setUpdatingToken(true)
+    try {
+      const res = await fetchApi('/api/meta/save-waba-credentials', {
+        method: 'POST',
+        body: JSON.stringify({
+          projectId: project.id,
+          wabaId,
+          phoneNumberId,
+          displayPhoneNumber: project.waba?.displayPhoneNumber ?? '',
+          verifiedName: project.waba?.verifiedName ?? '',
+          businessToken: newToken.trim(),
+        }),
+      })
+      if (!res.ok) {
+        const json = await res.json()
+        throw new Error(json.error ?? 'Erro ao salvar token')
+      }
+      toast.success('System User Token atualizado!')
+      setShowTokenForm(false)
+      setNewToken('')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao atualizar token')
+    } finally {
+      setUpdatingToken(false)
+    }
+  }
 
   return (
     <div
-      className={`rounded-xl border p-4 transition-all ${
+      className={`rounded-xl border transition-all ${
         isActive ? 'border-[#D42026] bg-red-50' : 'border-gray-200 bg-white'
       }`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-sm font-bold ${
-            isActive ? 'bg-[#D42026] text-white' : 'bg-gray-100 text-gray-500'
-          }`}>
-            {project.name.charAt(0).toUpperCase()}
+      <div className="p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-sm font-bold ${
+              isActive ? 'bg-[#D42026] text-white' : 'bg-gray-100 text-gray-500'
+            }`}>
+              {project.name.charAt(0).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-gray-900 truncate">{project.name}</p>
+              {project.description && (
+                <p className="text-xs text-gray-500 truncate">{project.description}</p>
+              )}
+            </div>
           </div>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-gray-900 truncate">{project.name}</p>
-            {project.description && (
-              <p className="text-xs text-gray-500 truncate">{project.description}</p>
+          <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+            {hasWaba ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-50 text-green-700 text-[10px] font-medium border border-green-100">
+                <CheckCircle2 className="w-3 h-3" />
+                WhatsApp conectado
+              </span>
+            ) : (
+              <button
+                onClick={onConnect}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#1877F2] text-white text-[10px] font-semibold hover:bg-[#166FE5] transition-colors"
+              >
+                <Wifi className="w-3 h-3" />
+                Conectar
+              </button>
+            )}
+            {!isActive && (
+              <button
+                onClick={onSelect}
+                className="px-2.5 py-1 text-[11px] font-medium text-[#D42026] border border-[#D42026]/30 rounded-lg hover:bg-red-50 transition-colors"
+              >
+                Usar
+              </button>
+            )}
+            {isActive && (
+              <span className="px-2.5 py-1 text-[11px] font-medium text-white bg-[#D42026] rounded-lg">
+                Ativo
+              </span>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-          {hasWaba ? (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-50 text-green-700 text-[10px] font-medium border border-green-100">
-              <CheckCircle2 className="w-3 h-3" />
-              WhatsApp conectado
-            </span>
-          ) : (
+
+        {hasWaba && (
+          <div className="mt-3 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
+                <Phone className="w-3 h-3 shrink-0" />
+                <span className="truncate">{phoneNumber}</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
+                <Building2 className="w-3 h-3 shrink-0" />
+                <span className="truncate">{verifiedName}</span>
+              </div>
+            </div>
             <button
-              onClick={onConnect}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#1877F2] text-white text-[10px] font-semibold hover:bg-[#166FE5] transition-colors"
+              onClick={() => setShowTokenForm(v => !v)}
+              className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors shrink-0"
+              title="Atualizar System User Token"
             >
-              <Wifi className="w-3 h-3" />
-              Conectar
+              <KeyRound className="w-3 h-3" />
+              Atualizar Token
             </button>
-          )}
-          {!isActive && (
-            <button
-              onClick={onSelect}
-              className="px-2.5 py-1 text-[11px] font-medium text-[#D42026] border border-[#D42026]/30 rounded-lg hover:bg-red-50 transition-colors"
-            >
-              Usar
-            </button>
-          )}
-          {isActive && (
-            <span className="px-2.5 py-1 text-[11px] font-medium text-white bg-[#D42026] rounded-lg">
-              Ativo
-            </span>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
-      {hasWaba && (
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
-            <Phone className="w-3 h-3 shrink-0" />
-            <span className="truncate">{phoneNumber}</span>
+      {/* Token update form */}
+      {showTokenForm && hasWaba && (
+        <form
+          onSubmit={handleUpdateToken}
+          className="border-t border-gray-100 px-4 py-3 bg-gray-50 space-y-2"
+        >
+          <p className="text-[11px] text-gray-500">
+            Cole um <strong>System User Access Token</strong> com o escopo{' '}
+            <code className="bg-gray-100 px-1 rounded">whatsapp_business_messaging</code>{' '}
+            para habilitar o envio de mensagens.
+          </p>
+          <div className="flex gap-2">
+            <input
+              type="password"
+              value={newToken}
+              onChange={e => setNewToken(e.target.value)}
+              placeholder="EAAB... (System User Token)"
+              required
+              className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-[#D42026]/40"
+            />
+            <button
+              type="button"
+              onClick={() => { setShowTokenForm(false); setNewToken('') }}
+              className="px-2 py-1.5 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="submit"
+              disabled={updatingToken || !newToken.trim()}
+              className="flex items-center gap-1 px-3 py-1.5 bg-[#D42026] text-white text-xs font-semibold rounded-lg hover:bg-[#b91c1c] disabled:opacity-50 transition-colors"
+            >
+              {updatingToken && <Loader2 className="w-3 h-3 animate-spin" />}
+              Salvar
+            </button>
           </div>
-          <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
-            <Building2 className="w-3 h-3 shrink-0" />
-            <span className="truncate">{verifiedName}</span>
-          </div>
-        </div>
+        </form>
       )}
     </div>
   )
