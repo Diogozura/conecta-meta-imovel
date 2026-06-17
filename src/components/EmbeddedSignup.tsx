@@ -230,9 +230,12 @@ export default function EmbeddedSignup({ onSuccess }: EmbeddedSignupProps) {
         config_id: process.env.NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID,
         response_type: 'code',
         override_default_response_type: true,
+        scope: 'whatsapp_business_management,whatsapp_business_messaging,business_management',
         extras: {
-          sessionInfoVersion: 3,
+          sessionInfoVersion: '3',
           featureType: 'whatsapp_business_app_onboarding',
+          version: 'v4',
+          features: [{ name: 'app_only_install' }],
         },
       },
     )
