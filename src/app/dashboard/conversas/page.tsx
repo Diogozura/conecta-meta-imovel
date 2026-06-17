@@ -12,7 +12,6 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useProject } from '@/lib/project-context'
-import EditProjectConfigModal from '@/components/EditProjectConfigModal'
 import { fetchApi } from '@/lib/api-client'
 import type { Conversation } from '@/lib/firebase-types'
 
@@ -500,7 +499,6 @@ function ConversasInner() {
           </div>
         )}
       </div>
-      <EditProjectConfigModal />
     </div>
   )
 }
