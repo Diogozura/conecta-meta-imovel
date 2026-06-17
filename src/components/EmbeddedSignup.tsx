@@ -200,10 +200,28 @@ export default function EmbeddedSignup({ onSuccess }: EmbeddedSignupProps) {
             detail: `WABA: ${wabaId}${phoneNumberId ? ` · Telefone ID: ${phoneNumberId}` : ''}`,
           })
 
-          // Passo 3 (CoEx): webhook configurado globalmente no App Dashboard da Meta.
-          // Não chamamos /subscribed_apps por cliente — a Meta bloqueia esse endpoint
-          // para contas compartilhadas de Solution Providers sem permissão administrativa.
-          setStep(3, { status: 'done', detail: 'Configuração de webhook gerenciada pelo sistema.' })
+          // Passo 3: inscrever o app na WABA para receber webhooks
+          setStep(3, { status: 'loading' })
+          try {
+            const subRes = await fetch(
+              `https://graph.facebook.com/${graphVersion}/${wabaId}/subscribed_apps`,
+              {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${accessToken}` },
+              },
+            )
+            const subData = await subRes.json() as { success?: boolean; error?: { message: string } }
+            if (subData.success) {
+              setStep(3, { status: 'done', detail: 'Webhook inscrito com sucesso.' })
+            } else {
+              // Pode falhar em modo CoEx sem remover o funcionamento — registra mas continua
+              const reason = subData.error?.message ?? 'Webhook gerenciado globalmente pelo sistema.'
+              console.warn('[EmbeddedSignup] subscribed_apps:', reason)
+              setStep(3, { status: 'done', detail: reason })
+            }
+          } catch {
+            setStep(3, { status: 'done', detail: 'Webhook gerenciado globalmente pelo sistema.' })
+          }
 
           onSuccess?.({ wabaId, phoneNumberId, accessToken })
         })()
