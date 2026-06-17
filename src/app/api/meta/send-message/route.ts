@@ -1,6 +1,63 @@
 import { requireAuth } from '@/lib/server-auth'
 import { sendTextMessage } from '@/lib/meta'
 
+function extractUserId(request: Request): string {
+  try {
+    const header = request.headers.get('Authorization') ?? ''
+    const parts = header.slice(7).split('.')
+    if (parts.length !== 3) return 'agent'
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString())
+    return typeof payload.sub === 'string' ? payload.sub : 'agent'
+  } catch {
+    return 'agent'
+  }
+}
+
+async function saveOutgoingMessage(
+  conversationId: string,
+  projectId: string,
+  phoneNumberId: string,
+  to: string,
+  message: string,
+  metaMessageId: string | null,
+  userId: string,
+) {
+  try {
+    const { getAdminDb } = await import('@/lib/firebase-admin')
+    const { FieldValue } = await import('firebase-admin/firestore')
+    const db = getAdminDb()
+    const batch = db.batch()
+
+    batch.set(db.collection('conversations').doc(conversationId), {
+      projectId,
+      phoneNumberId,
+      phoneNumber: to,
+      lastMessage: message,
+      lastMessageTime: FieldValue.serverTimestamp(),
+      status: 'active',
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true })
+
+    batch.set(db.collection('messages').doc(), {
+      projectId,
+      conversationId,
+      metaMessageId,
+      senderId: userId,
+      senderType: 'user',
+      content: message,
+      mediaType: null,
+      timestamp: FieldValue.serverTimestamp(),
+      read: true,
+      deliveryStatus: 'sent',
+      createdAt: FieldValue.serverTimestamp(),
+    })
+
+    await batch.commit()
+  } catch (err) {
+    console.error('[send-message] Firestore write error:', err)
+  }
+}
+
 async function getMetaConfig(projectId: string) {
   // 1. Tenta via Admin SDK (bypassa regras do Firestore)
   try {
@@ -33,6 +90,7 @@ export async function POST(request: Request) {
   if (!(await requireAuth(request))) {
     return Response.json({ error: 'Não autorizado' }, { status: 401 })
   }
+  const userId = extractUserId(request)
 
   let body: { to?: string; message?: string; projectId?: string }
   try {
@@ -68,6 +126,12 @@ export async function POST(request: Request) {
 
   try {
     const result = await sendTextMessage(phoneNumberId, businessToken, to, body.message)
+    const conversationId = `${body.projectId}_${to}`
+    void saveOutgoingMessage(
+      conversationId, body.projectId, phoneNumberId, to, body.message,
+      (result as { messages?: { id: string }[] })?.messages?.[0]?.id ?? null,
+      userId,
+    )
     return Response.json(result)
   } catch (err) {
     return Response.json(
