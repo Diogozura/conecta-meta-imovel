@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import {
   Settings, Plus, CheckCircle2, AlertCircle, Loader2,
-  Phone, Building2, X, ChevronRight, CheckCircle, Wifi, KeyRound,
+  Phone, Building2, X, ChevronRight, CheckCircle, Wifi, KeyRound, Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuthContext } from '@/lib/auth-context'
@@ -27,11 +27,13 @@ function ProjectCard({
   isActive,
   onSelect,
   onConnect,
+  onDelete,
 }: {
   project: Project
   isActive: boolean
   onSelect: () => void
   onConnect: () => void
+  onDelete: () => void
 }) {
   const hasWaba = !!(project.waba?.wabaId || project.waba?.WABA_ID)
   const wabaId = project.waba?.wabaId || project.waba?.WABA_ID || ''
@@ -122,6 +124,13 @@ function ProjectCard({
                 Ativo
               </span>
             )}
+            <button
+              onClick={onDelete}
+              className="p-1.5 rounded-md text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors shrink-0"
+              title="Deletar projeto"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
 
@@ -381,6 +390,24 @@ export default function ConfiguracoesPage() {
     setTimeout(() => setAction(null), 2000)
   }
 
+  async function handleDeleteProject(project: Project) {
+    if (!project.id) return
+    const confirmed = window.confirm(`Deletar o projeto "${project.name}"? Esta ação não pode ser desfeita.`)
+    if (!confirmed) return
+    try {
+      const res = await fetchApi(`/api/projects/delete?projectId=${project.id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const json = await res.json()
+        throw new Error(json.error ?? 'Erro ao deletar')
+      }
+      toast.success(`Projeto "${project.name}" deletado.`)
+      if (currentProject?.id === project.id) setCurrentProject(null as unknown as Project)
+      await loadProjects()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao deletar projeto')
+    }
+  }
+
   function cancelAction() {
     setAction(null)
     setNewName('')
@@ -515,6 +542,7 @@ export default function ConfiguracoesPage() {
               isActive={currentProject?.id === p.id}
               onSelect={() => setCurrentProject(p)}
               onConnect={() => setAction({ type: 'connect', projectId: p.id!, projectName: p.name })}
+              onDelete={() => handleDeleteProject(p)}
             />
           ))}
         </div>
