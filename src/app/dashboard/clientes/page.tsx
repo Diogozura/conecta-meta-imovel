@@ -94,15 +94,20 @@ function ProjectCard({ project }: { project: Project }) {
 }
 
 // ── Meta Partners Panel ──────────────────────────────────────────────────────
-function MetaPartnersPanel({ projectId }: { projectId: string }) {
+function MetaPartnersPanel({ projectId, onRefresh }: { projectId: string; onRefresh: () => void }) {
+  const { user } = useAuth()
   const [open, setOpen] = useState(false)
   const [partners, setPartners] = useState<MetaPartner[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [businessId, setBusinessId] = useState<string | null>(null)
   const [permissionDenied, setPermissionDenied] = useState(false)
+  const [isWabaEndpoint, setIsWabaEndpoint] = useState(false)
 
-  async function fetch() {
+  // estado de import por parceiro: null | 'form' | 'importing' | 'done' | 'error'
+  const [importState, setImportState] = useState<Record<string, { status: 'form' | 'importing' | 'done' | 'error'; name: string; error?: string }>>({})
+
+  async function load() {
     setLoading(true)
     setError(null)
     setPermissionDenied(false)
@@ -117,6 +122,8 @@ function MetaPartnersPanel({ projectId }: { projectId: string }) {
       if (!res.ok) throw new Error(json.error ?? 'Erro ao buscar parceiros')
       setPartners(json.partners ?? [])
       setBusinessId(json.businessId ?? null)
+      const wabaEdges = ['client_whatsapp_business_accounts', 'owned_whatsapp_business_accounts']
+      setIsWabaEndpoint(wabaEdges.includes(json.endpoint))
       setOpen(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro desconhecido')
@@ -126,10 +133,39 @@ function MetaPartnersPanel({ projectId }: { projectId: string }) {
     }
   }
 
+  function openImportForm(partner: MetaPartner) {
+    setImportState(prev => ({ ...prev, [partner.id]: { status: 'form', name: partner.name } }))
+  }
+
+  function cancelImport(id: string) {
+    setImportState(prev => { const s = { ...prev }; delete s[id]; return s })
+  }
+
+  async function handleImport(partner: MetaPartner) {
+    const name = importState[partner.id]?.name?.trim()
+    if (!name || !user?.uid) return
+    setImportState(prev => ({ ...prev, [partner.id]: { status: 'importing', name } }))
+    try {
+      const res = await fetchApi('/api/meta/sync-waba', {
+        method: 'POST',
+        body: JSON.stringify({ sourceProjectId: projectId, wabaId: partner.id, targetProjectName: name, ownerId: user.uid }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Erro ao importar')
+      setImportState(prev => ({ ...prev, [partner.id]: { status: 'done', name } }))
+      onRefresh()
+    } catch (err) {
+      setImportState(prev => ({
+        ...prev,
+        [partner.id]: { status: 'error', name, error: err instanceof Error ? err.message : 'Erro desconhecido' },
+      }))
+    }
+  }
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <button
-        onClick={() => (open ? setOpen(false) : partners.length > 0 ? setOpen(true) : fetch())}
+        onClick={() => (open ? setOpen(false) : partners.length > 0 ? setOpen(true) : load())}
         className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors"
       >
         <div className="flex items-center gap-3">
@@ -142,15 +178,15 @@ function MetaPartnersPanel({ projectId }: { projectId: string }) {
               {permissionDenied
                 ? 'Permissão insuficiente — token sem business_management'
                 : partners.length > 0
-                  ? `${partners.length} parceiro${partners.length !== 1 ? 's' : ''} encontrado${partners.length !== 1 ? 's' : ''}`
-                  : 'Clique para buscar os parceiros vinculados no Meta Business Manager'}
+                  ? `${partners.length} conta${partners.length !== 1 ? 's' : ''} encontrada${partners.length !== 1 ? 's' : ''} — clique para ${isWabaEndpoint ? 'importar' : 'ver'}`
+                  : 'Clique para buscar as contas vinculadas no Meta Business Manager'}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {(partners.length > 0 || error || permissionDenied) && (
             <button
-              onClick={e => { e.stopPropagation(); void fetch() }}
+              onClick={e => { e.stopPropagation(); void load() }}
               className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
               title="Atualizar"
             >
@@ -175,29 +211,85 @@ function MetaPartnersPanel({ projectId }: { projectId: string }) {
               </div>
             </div>
           ) : partners.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-4">Nenhum parceiro encontrado neste Business Manager.</p>
+            <p className="text-sm text-gray-400 text-center py-4">Nenhuma conta encontrada neste Business Manager.</p>
           ) : (
             <div className="space-y-2">
               {businessId && (
                 <p className="text-xs text-gray-400 mb-3">Business ID: <span className="font-mono">{businessId}</span></p>
               )}
-              {partners.map(p => (
-                <div key={p.id} className="flex items-center gap-3 py-2.5 px-3 rounded-lg hover:bg-gray-50 border border-gray-100 transition-colors">
-                  {p.picture ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.picture} alt={p.name} className="w-8 h-8 rounded-full object-cover shrink-0" />
-                  ) : (
-                    <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center shrink-0">
-                      <Building2 className="w-4 h-4 text-gray-400" />
+              {partners.map(p => {
+                const imp = importState[p.id]
+                return (
+                  <div key={p.id} className="rounded-lg border border-gray-100 overflow-hidden">
+                    <div className="flex items-center gap-3 py-2.5 px-3 hover:bg-gray-50 transition-colors">
+                      {p.picture ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={p.picture} alt={p.name} className="w-8 h-8 rounded-full object-cover shrink-0" />
+                      ) : (
+                        <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center shrink-0">
+                          <Building2 className="w-4 h-4 text-gray-400" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{p.name}</p>
+                        <p className="text-xs text-gray-400 font-mono">ID: {p.id}</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <CopyButton value={p.id} />
+                        {isWabaEndpoint && (
+                          imp?.status === 'done' ? (
+                            <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
+                              <CheckCircle2 className="w-3.5 h-3.5" /> Importado
+                            </span>
+                          ) : imp?.status === 'importing' ? (
+                            <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
+                          ) : (
+                            <button
+                              onClick={() => openImportForm(p)}
+                              className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-[#1877F2] hover:bg-[#166FE5] rounded-lg transition-colors"
+                            >
+                              <Plus className="w-3 h-3" />
+                              Importar
+                            </button>
+                          )
+                        )}
+                      </div>
                     </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{p.name}</p>
-                    <p className="text-xs text-gray-400 font-mono">ID: {p.id}</p>
+
+                    {/* Formulário inline de import */}
+                    {imp?.status === 'form' || imp?.status === 'error' ? (
+                      <div className="border-t border-gray-100 bg-gray-50 px-3 py-2.5 space-y-2">
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={imp.name}
+                            onChange={e => setImportState(prev => ({ ...prev, [p.id]: { ...prev[p.id], name: e.target.value } }))}
+                            placeholder="Nome do projeto"
+                            autoFocus
+                            className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/40 bg-white"
+                          />
+                          <button
+                            onClick={() => handleImport(p)}
+                            disabled={!imp.name.trim()}
+                            className="flex items-center gap-1 px-3 py-1.5 bg-[#1877F2] text-white text-xs font-semibold rounded-lg hover:bg-[#166FE5] disabled:opacity-50 transition-colors"
+                          >
+                            Criar projeto
+                          </button>
+                          <button
+                            onClick={() => cancelImport(p.id)}
+                            className="px-2 py-1.5 text-gray-400 border border-gray-200 rounded-lg hover:bg-white transition-colors"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        {imp?.status === 'error' && (
+                          <p className="text-xs text-red-500">{imp.error}</p>
+                        )}
+                      </div>
+                    ) : null}
                   </div>
-                  <CopyButton value={p.id} />
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
@@ -540,7 +632,7 @@ export default function ClientesPage() {
 
       {/* Meta Partners Panel */}
       {currentProject?.id && (
-        <MetaPartnersPanel projectId={currentProject.id} />
+        <MetaPartnersPanel projectId={currentProject.id} onRefresh={() => setRefreshKey(k => k + 1)} />
       )}
 
       {/* Content */}

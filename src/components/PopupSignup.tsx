@@ -49,7 +49,6 @@ export default function PopupSignup({ projectId, onSuccess, onError }: PopupSign
       featureType: 'whatsapp_business_app_onboarding',
       sessionInfoVersion: '3',
       version: 'v4',
-      features: [{ name: 'app_only_install' }],
     })
 
     const params = new URLSearchParams({

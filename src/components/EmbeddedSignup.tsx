@@ -235,7 +235,6 @@ export default function EmbeddedSignup({ onSuccess }: EmbeddedSignupProps) {
           sessionInfoVersion: '3',
           featureType: 'whatsapp_business_app_onboarding',
           version: 'v4',
-          features: [{ name: 'app_only_install' }],
         },
       },
     )
