@@ -210,17 +210,24 @@ function MetaPartnersPanel({ projectId }: { projectId: string }) {
 function ConnectMetaModal({ onClose, onConnected }: { onClose: () => void; onConnected: () => void }) {
   const { user } = useAuth()
   const { currentProject, setCurrentProject } = useProject()
+
+  // ID do projeto alvo mantido em estado local para evitar stale closure
+  const [targetProjectId, setTargetProjectId] = useState<string>(currentProject?.id ?? '')
+  const [targetProjectName, setTargetProjectName] = useState<string>(currentProject?.name ?? '')
+
   const [step, setStep] = useState<ModalStep>('signup')
   const [errorMsg, setErrorMsg] = useState('')
   const [savedData, setSavedData] = useState<{ wabaId: string; displayPhone: string } | null>(null)
   const [showNewProject, setShowNewProject] = useState(false)
   const [newProjectName, setNewProjectName] = useState('')
   const [creatingProject, setCreatingProject] = useState(false)
+  const [createError, setCreateError] = useState('')
 
   async function handleCreateProject(e: React.FormEvent) {
     e.preventDefault()
     if (!newProjectName.trim() || !user?.uid) return
     setCreatingProject(true)
+    setCreateError('')
     try {
       const projectId = await projectService.createProject({
         name: newProjectName.trim(),
@@ -229,18 +236,21 @@ function ConnectMetaModal({ onClose, onConnected }: { onClose: () => void; onCon
         collaborators: [],
         status: 'active',
       } as Parameters<typeof projectService.createProject>[0])
+      // Atualiza o contexto global e o ID local imediatamente
       setCurrentProject({ id: projectId, name: newProjectName.trim() } as Project)
+      setTargetProjectId(projectId)
+      setTargetProjectName(newProjectName.trim())
       setNewProjectName('')
       setShowNewProject(false)
     } catch {
-      // erro silencioso — o usuário pode tentar novamente
+      setCreateError('Erro ao criar projeto. Tente novamente.')
     } finally {
       setCreatingProject(false)
     }
   }
 
   async function handleSuccess(data: { wabaId: string; phoneNumberId: string; accessToken: string }) {
-    if (!currentProject?.id) {
+    if (!targetProjectId) {
       setErrorMsg('Nenhum projeto selecionado. Selecione um projeto e tente novamente.')
       setStep('error')
       return
@@ -270,7 +280,7 @@ function ConnectMetaModal({ onClose, onConnected }: { onClose: () => void; onCon
       const res = await fetchApi('/api/meta/save-waba-credentials', {
         method: 'POST',
         body: JSON.stringify({
-          projectId: currentProject.id,
+          projectId: targetProjectId,
           wabaId: data.wabaId,
           phoneNumberId: data.phoneNumberId,
           displayPhoneNumber,
@@ -315,14 +325,14 @@ function ConnectMetaModal({ onClose, onConnected }: { onClose: () => void; onCon
         <div className="px-6 py-5 space-y-4">
           {/* Indicador de projeto — sempre visível */}
           <div className="space-y-2">
-            {currentProject ? (
+            {targetProjectId ? (
               <div className="flex items-center justify-between gap-2 text-sm text-gray-600 bg-gray-50 rounded-lg px-3 py-2">
                 <div className="flex items-center gap-2 min-w-0">
                   <Building2 className="w-4 h-4 text-gray-400 shrink-0" />
-                  <span className="truncate">Projeto ativo: <span className="font-medium text-gray-900">{currentProject.name}</span></span>
+                  <span className="truncate">Projeto: <span className="font-medium text-gray-900">{targetProjectName}</span></span>
                 </div>
                 <button
-                  onClick={() => setShowNewProject(v => !v)}
+                  onClick={() => { setShowNewProject(v => !v); setCreateError('') }}
                   className="flex items-center gap-1 text-xs text-[#D42026] hover:underline shrink-0"
                 >
                   <Plus className="w-3 h-3" />
@@ -336,7 +346,7 @@ function ConnectMetaModal({ onClose, onConnected }: { onClose: () => void; onCon
                   Nenhum projeto selecionado.
                 </div>
                 <button
-                  onClick={() => setShowNewProject(v => !v)}
+                  onClick={() => { setShowNewProject(v => !v); setCreateError('') }}
                   className="flex items-center gap-1 text-xs text-yellow-800 font-medium hover:underline shrink-0"
                 >
                   <Plus className="w-3 h-3" />
@@ -346,31 +356,36 @@ function ConnectMetaModal({ onClose, onConnected }: { onClose: () => void; onCon
             )}
 
             {showNewProject && (
-              <form onSubmit={handleCreateProject} className="flex gap-2">
-                <input
-                  type="text"
-                  value={newProjectName}
-                  onChange={e => setNewProjectName(e.target.value)}
-                  placeholder="Nome do projeto"
-                  required
-                  autoFocus
-                  className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#D42026]/40"
-                />
-                <button
-                  type="submit"
-                  disabled={creatingProject || !newProjectName.trim()}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-[#D42026] text-white text-xs font-semibold rounded-lg hover:bg-[#b91c1c] disabled:opacity-50 transition-colors"
-                >
-                  {creatingProject ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Criar'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setShowNewProject(false); setNewProjectName('') }}
-                  className="px-2 py-1.5 text-gray-400 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </form>
+              <div className="space-y-1.5">
+                <form onSubmit={handleCreateProject} className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newProjectName}
+                    onChange={e => setNewProjectName(e.target.value)}
+                    placeholder="Nome do projeto"
+                    required
+                    autoFocus
+                    className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#D42026]/40"
+                  />
+                  <button
+                    type="submit"
+                    disabled={creatingProject || !newProjectName.trim()}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-[#D42026] text-white text-xs font-semibold rounded-lg hover:bg-[#b91c1c] disabled:opacity-50 transition-colors"
+                  >
+                    {creatingProject ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Criar'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowNewProject(false); setNewProjectName(''); setCreateError('') }}
+                    className="px-2 py-1.5 text-gray-400 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </form>
+                {createError && (
+                  <p className="text-xs text-red-500">{createError}</p>
+                )}
+              </div>
             )}
           </div>
 
@@ -432,12 +447,12 @@ function ConnectMetaModal({ onClose, onConnected }: { onClose: () => void; onCon
           {/* ── Signup via FB SDK ── */}
           {step === 'signup' && (
             <div className="space-y-4">
-              {!currentProject && (
+              {!targetProjectId && (
                 <p className="text-xs text-gray-400 italic">
-                  Selecione um projeto acima antes de prosseguir.
+                  Crie ou selecione um projeto acima antes de prosseguir.
                 </p>
               )}
-              {currentProject?.id && (
+              {targetProjectId && (
                 <EmbeddedSignup onSuccess={handleSuccess} />
               )}
             </div>
