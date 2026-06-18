@@ -23,7 +23,6 @@ interface PopupSignupProps {
 
 const POPUP_W = 600
 const POPUP_H = 700
-const META_OAUTH_VERSION = 'v25.0'
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -42,28 +41,26 @@ export default function PopupSignup({ projectId, onSuccess, onError }: PopupSign
 
   function buildOAuthUrl(): string {
     const appId = process.env.NEXT_PUBLIC_META_APP_ID ?? ''
+    const configId = process.env.NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID ?? ''
     const redirectUri = `${window.location.origin}/api/auth/callback/meta`
-
-    // state transporta o projectId de volta ao callback server-side
     const state = btoa(JSON.stringify({ projectId, t: Date.now() }))
 
-    // extras força a abertura direta do Onboarding do WhatsApp Business
     const extras = JSON.stringify({
-      setup: {},
-      sessionInfoVersion: 3,
-      featureType: 'whatsapp_embedded_signup',
+      featureType: 'whatsapp_business_app_onboarding',
+      sessionInfoVersion: '3',
+      version: 'v4',
+      features: [{ name: 'app_only_install' }],
     })
 
     const params = new URLSearchParams({
-      client_id: appId,
-      redirect_uri: redirectUri,
-      response_type: 'code',
-      scope: 'public_profile,whatsapp_business_management,whatsapp_business_messaging',
+      app_id: appId,
+      config_id: configId,
       extras,
+      redirect_uri: redirectUri,
       state,
     })
 
-    return `https://www.facebook.com/${META_OAUTH_VERSION}/dialog/oauth?${params.toString()}`
+    return `https://business.facebook.com/messaging/whatsapp/onboard/?${params.toString()}`
   }
 
   function handleOpen() {
