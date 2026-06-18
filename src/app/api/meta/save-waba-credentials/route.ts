@@ -1,6 +1,11 @@
 import { requireAuth } from '@/lib/server-auth'
 import { getAdminDb } from '@/lib/firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
+function makeToken(): string {
+  const bytes = new Uint8Array(32)
+  globalThis.crypto.getRandomValues(bytes)
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('')
+}
 
 interface SaveWabaBody {
   projectId: string
@@ -95,10 +100,16 @@ export async function POST(request: Request) {
 
   try {
     const db = getAdminDb()
+    const projectRef = db.collection('projects').doc(projectId)
+
+    // Preserva token existente — só gera um novo na primeira conexão
+    const projectSnap = await projectRef.get()
+    const existingToken = (projectSnap.data() as { webhookToken?: string })?.webhookToken
+    const webhookToken = existingToken ?? makeToken()
+
     const batch = db.batch()
 
     // 1. Dados públicos do projeto
-    const projectRef = db.collection('projects').doc(projectId)
     batch.set(projectRef, {
       waba: {
         wabaId,
@@ -106,6 +117,7 @@ export async function POST(request: Request) {
         displayPhoneNumber: displayPhoneNumber ?? '',
         verifiedName: verifiedName ?? '',
       },
+      webhookToken,
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true })
 

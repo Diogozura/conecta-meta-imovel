@@ -75,6 +75,8 @@ export interface Project extends FirebaseDocument {
     // BUSINESS_TOKEN removido — armazenado em project_secrets (somente server-side)
   };
   status: 'active' | 'inactive' | 'archived';
+  webhookToken?: string;
+  n8nWebhookUrl?: string;
   createdAt: Date;
   updatedAt: Date;
 }

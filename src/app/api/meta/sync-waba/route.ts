@@ -1,6 +1,11 @@
 import { requireAuth } from '@/lib/server-auth'
 import { getAdminDb } from '@/lib/firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
+function makeToken(): string {
+  const bytes = new Uint8Array(32)
+  globalThis.crypto.getRandomValues(bytes)
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('')
+}
 
 const GRAPH = `https://graph.facebook.com/${process.env.META_GRAPH_API_VERSION ?? 'v21.0'}`
 
@@ -59,6 +64,7 @@ export async function POST(request: Request) {
   // 3. Cria o projeto e salva credenciais em batch
   const projectRef = db.collection('projects').doc()
   const batch = db.batch()
+  const webhookToken = makeToken()
 
   batch.set(projectRef, {
     name: targetProjectName,
@@ -66,6 +72,7 @@ export async function POST(request: Request) {
     wabaId,
     collaborators: [],
     status: 'active',
+    webhookToken,
     waba: {
       wabaId,
       phoneNumberId,

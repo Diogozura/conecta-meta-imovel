@@ -26,11 +26,12 @@ interface N8nPayload {
   recipientId?: string
 }
 
-async function forwardToN8n(payload: N8nPayload): Promise<void> {
-  if (!N8N_WEBHOOK_URL) return
-  const secretToken = process.env.N8N_WEBHOOK_SECRET_TOKEN
+async function forwardToN8n(payload: N8nPayload, url?: string, token?: string): Promise<void> {
+  const n8nUrl = url || N8N_WEBHOOK_URL
+  if (!n8nUrl) return
+  const secretToken = token || process.env.N8N_WEBHOOK_SECRET_TOKEN
   try {
-    const response = await fetch(N8N_WEBHOOK_URL, {
+    const response = await fetch(n8nUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -109,10 +110,31 @@ export async function GET(request: Request) {
   return new Response('Forbidden', { status: 403 })
 }
 
+/* ─── Valida token por projeto (chamadas externas com ?id=) ──────────────── */
+async function validateProjectToken(projectId: string, token: string | null): Promise<boolean> {
+  if (!token || !projectId) return false
+  const snap = await getAdminDb().collection('projects').doc(projectId).get()
+  if (!snap.exists) return false
+  const data = snap.data() as { webhookToken?: string }
+  return data?.webhookToken === token
+}
+
 /* ─── POST: recebimento de eventos ──────────────────────────────────────── */
 export async function POST(request: Request) {
-  const rawBody = await request.text()
+  const { searchParams } = new URL(request.url)
+  const projectId = searchParams.get('id')
 
+  // Chamada direta por projeto (ex.: n8n ou integração externa)
+  if (projectId) {
+    const token = request.headers.get('x-webhook-token')
+    const valid = await validateProjectToken(projectId, token)
+    if (!valid) return new Response('Unauthorized', { status: 401 })
+    // Aceita e responde OK — extensível para processar payloads externos no futuro
+    return new Response('OK', { status: 200 })
+  }
+
+  // Evento do Meta (assinatura HMAC)
+  const rawBody = await request.text()
   const signature = request.headers.get('x-hub-signature-256') ?? ''
   const appSecret = process.env.META_APP_SECRET ?? ''
   if (appSecret) {
@@ -154,17 +176,23 @@ async function processEntry(entry: WebhookEntry) {
 
     const { projectId, wabaId } = lookupSnap.data() as { projectId: string; wabaId: string }
 
+    // Busca configuração n8n por projeto (URL + token individuais)
+    const projectSnap = await db.collection('projects').doc(projectId).get()
+    const projectData = projectSnap.data() as { n8nWebhookUrl?: string; webhookToken?: string } | undefined
+    const n8nUrl = projectData?.n8nWebhookUrl || N8N_WEBHOOK_URL
+    const webhookToken = projectData?.webhookToken || process.env.N8N_WEBHOOK_SECRET_TOKEN
+
     await Promise.allSettled([
       ...(value.messages ?? []).map(msg =>
         Promise.allSettled([
           processIncomingMessage(projectId, phoneNumberId, value, msg),
-          forwardToN8n(buildMessagePayload(projectId, wabaId, phoneNumberId, value, msg)),
+          forwardToN8n(buildMessagePayload(projectId, wabaId, phoneNumberId, value, msg), n8nUrl, webhookToken),
         ]),
       ),
       ...(value.statuses ?? []).map(status =>
         Promise.allSettled([
           processMessageStatus(projectId, status),
-          forwardToN8n(buildStatusPayload(projectId, wabaId, phoneNumberId, status)),
+          forwardToN8n(buildStatusPayload(projectId, wabaId, phoneNumberId, status), n8nUrl, webhookToken),
         ]),
       ),
     ])

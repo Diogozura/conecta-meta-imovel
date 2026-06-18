@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Search, Copy, Check, Webhook, Hash, Building2, CheckCircle2, AlertCircle, Phone, Plus, X, Loader2, CheckCircle, RefreshCw, ChevronDown, ChevronUp, Users } from 'lucide-react'
+import { Search, Copy, Check, Webhook, Hash, Building2, CheckCircle2, AlertCircle, Phone, Plus, X, Loader2, CheckCircle, RefreshCw, ChevronDown, ChevronUp, Users, RotateCcw, Link2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { useAuth } from '@/lib/use-auth'
 import { useProject } from '@/lib/project-context'
 import projectService from '@/lib/project-service'
@@ -58,17 +59,44 @@ function InfoRow({ icon: Icon, label, value }: { icon: React.ElementType; label:
 function ProjectCard({ project }: { project: Project }) {
   const wabaId = project.waba?.WABA_ID ?? project.waba?.wabaId
   const phoneNumberId = project.waba?.PHONE_NUMBER_ID ?? project.waba?.phoneNumberId
-  const webhookToken = project.metaConfig?.WEBHOOK_VERIFY_TOKEN
   const displayPhone = project.waba?.displayPhoneNumber
   const verifiedName = project.waba?.verifiedName
   const isLinked = !!(wabaId && phoneNumberId)
 
+  const [localToken, setLocalToken] = useState<string | undefined>(project.webhookToken)
+  const [regenerating, setRegenerating] = useState(false)
+  const webhookUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}/api/webhook?id=${project.id}`
+    : `/api/webhook?id=${project.id}`
+
+  async function handleRegenerateToken() {
+    if (!project.id) return
+    if (!window.confirm('Gerar um novo token invalidará o atual no n8n. Continuar?')) return
+    setRegenerating(true)
+    try {
+      const res = await fetchApi('/api/projects/webhook-config', {
+        method: 'POST',
+        body: JSON.stringify({ projectId: project.id }),
+      })
+      const json = await res.json().catch(() => ({})) as { webhookToken?: string; error?: string }
+      if (!res.ok) throw new Error(json.error ?? `Erro ${res.status}`)
+      if (!json.webhookToken) throw new Error('Token não retornado pelo servidor')
+      setLocalToken(json.webhookToken)
+      toast.success('Token regenerado com sucesso')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao regenerar token')
+    } finally {
+      setRegenerating(false)
+    }
+  }
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4 hover:border-gray-300 transition-colors">
+      {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-9 h-9 bg-green-100 rounded-lg flex items-center justify-center shrink-0">
-            <Building2 className="w-4.5 h-4.5 text-green-700" />
+            <Building2 className="w-4 h-4 text-green-700" />
           </div>
           <div className="min-w-0">
             <p className="text-sm font-semibold text-gray-900 truncate">{project.name}</p>
@@ -84,10 +112,45 @@ function ProjectCard({ project }: { project: Project }) {
           {isLinked ? <><CheckCircle2 className="w-3 h-3" />Vinculado</> : <><AlertCircle className="w-3 h-3" />Pendente</>}
         </span>
       </div>
+
+      {/* WABA IDs */}
       <div className="bg-gray-50 rounded-lg px-3 py-1">
         <InfoRow icon={Hash} label="WABA ID" value={wabaId} />
         <InfoRow icon={Hash} label="Phone Number ID" value={phoneNumberId} />
-        <InfoRow icon={Webhook} label="Webhook Token" value={webhookToken} />
+      </div>
+
+      {/* Webhook / n8n config */}
+      <div className="border border-gray-100 rounded-lg divide-y divide-gray-100">
+        {/* URL row */}
+        <div className="px-3 py-2.5 flex items-center gap-2">
+          <Link2 className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+          <span className="text-xs text-gray-500 w-20 shrink-0">URL Webhook</span>
+          <span className="text-xs font-mono text-gray-700 truncate flex-1">{webhookUrl}</span>
+          <CopyButton value={webhookUrl} />
+        </div>
+
+        {/* Token row */}
+        <div className="px-3 py-2.5 flex items-center gap-2">
+          <Webhook className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+          <span className="text-xs text-gray-500 w-20 shrink-0">Token</span>
+          {localToken ? (
+            <>
+              <span className="text-xs font-mono text-gray-700 truncate flex-1">{localToken.slice(0, 24)}…</span>
+              <CopyButton value={localToken} />
+            </>
+          ) : (
+            <span className="text-xs text-gray-400 italic flex-1">Não gerado</span>
+          )}
+          <button
+            onClick={handleRegenerateToken}
+            disabled={regenerating}
+            className="flex items-center gap-1 text-[10px] font-medium text-gray-400 hover:text-gray-600 transition-colors shrink-0 disabled:opacity-50"
+            title={localToken ? 'Regenerar token' : 'Gerar token'}
+          >
+            <RotateCcw className={`w-3 h-3 ${regenerating ? 'animate-spin' : ''}`} />
+            {localToken ? 'Regenerar' : 'Gerar'}
+          </button>
+        </div>
       </div>
     </div>
   )
