@@ -5,7 +5,7 @@ import { Search, Copy, Check, Webhook, Hash, Building2, CheckCircle2, AlertCircl
 import { useAuth } from '@/lib/use-auth'
 import { useProject } from '@/lib/project-context'
 import projectService from '@/lib/project-service'
-import PopupSignup, { type MetaSignupResult } from '@/components/PopupSignup'
+import EmbeddedSignup from '@/components/EmbeddedSignup'
 import { fetchApi } from '@/lib/api-client'
 import type { Project } from '@/lib/firebase-types'
 
@@ -18,7 +18,7 @@ interface MetaPartner {
   created_time?: string
 }
 
-type ModalStep = 'signup' | 'success'
+type ModalStep = 'signup' | 'saving' | 'success' | 'error'
 
 // ── Copy button ──────────────────────────────────────────────────────────────
 function CopyButton({ value }: { value: string }) {
@@ -208,19 +208,93 @@ function MetaPartnersPanel({ projectId }: { projectId: string }) {
 
 // ── Connect Meta modal ───────────────────────────────────────────────────────
 function ConnectMetaModal({ onClose, onConnected }: { onClose: () => void; onConnected: () => void }) {
-  const { currentProject } = useProject()
+  const { user } = useAuth()
+  const { currentProject, setCurrentProject } = useProject()
   const [step, setStep] = useState<ModalStep>('signup')
   const [errorMsg, setErrorMsg] = useState('')
-  const [savedData, setSavedData] = useState<MetaSignupResult | null>(null)
+  const [savedData, setSavedData] = useState<{ wabaId: string; displayPhone: string } | null>(null)
+  const [showNewProject, setShowNewProject] = useState(false)
+  const [newProjectName, setNewProjectName] = useState('')
+  const [creatingProject, setCreatingProject] = useState(false)
 
-  function handleSuccess(data: MetaSignupResult) {
-    // O callback server-side já salvou no Firestore — basta atualizar a UI
-    setSavedData(data)
-    setStep('success')
+  async function handleCreateProject(e: React.FormEvent) {
+    e.preventDefault()
+    if (!newProjectName.trim() || !user?.uid) return
+    setCreatingProject(true)
+    try {
+      const projectId = await projectService.createProject({
+        name: newProjectName.trim(),
+        owner: user.uid,
+        wabaId: '',
+        collaborators: [],
+        status: 'active',
+      } as Parameters<typeof projectService.createProject>[0])
+      setCurrentProject({ id: projectId, name: newProjectName.trim() } as Project)
+      setNewProjectName('')
+      setShowNewProject(false)
+    } catch {
+      // erro silencioso — o usuário pode tentar novamente
+    } finally {
+      setCreatingProject(false)
+    }
+  }
+
+  async function handleSuccess(data: { wabaId: string; phoneNumberId: string; accessToken: string }) {
+    if (!currentProject?.id) {
+      setErrorMsg('Nenhum projeto selecionado. Selecione um projeto e tente novamente.')
+      setStep('error')
+      return
+    }
+
+    setStep('saving')
+    setErrorMsg('')
+
+    try {
+      let displayPhoneNumber = ''
+      let verifiedName = ''
+
+      if (data.phoneNumberId) {
+        try {
+          const phoneRes = await fetch(
+            `https://graph.facebook.com/${process.env.NEXT_PUBLIC_META_GRAPH_API_VERSION ?? 'v21.0'}/${data.phoneNumberId}` +
+            `?fields=display_phone_number,verified_name&access_token=${data.accessToken}`
+          )
+          const phoneData = await phoneRes.json()
+          if (phoneRes.ok) {
+            displayPhoneNumber = phoneData.display_phone_number ?? ''
+            verifiedName = phoneData.verified_name ?? ''
+          }
+        } catch { /* não crítico */ }
+      }
+
+      const res = await fetchApi('/api/meta/save-waba-credentials', {
+        method: 'POST',
+        body: JSON.stringify({
+          projectId: currentProject.id,
+          wabaId: data.wabaId,
+          phoneNumberId: data.phoneNumberId,
+          displayPhoneNumber,
+          verifiedName,
+          businessToken: data.accessToken,
+          tryTokenExchange: true,
+        }),
+      })
+
+      if (!res.ok) {
+        const json = await res.json()
+        throw new Error(json.error ?? 'Erro ao salvar credenciais')
+      }
+
+      setSavedData({ wabaId: data.wabaId, displayPhone: displayPhoneNumber || data.phoneNumberId })
+      setStep('success')
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Erro desconhecido ao salvar credenciais.')
+      setStep('error')
+    }
   }
 
   function handleDone() {
-    onConnected() // dispara refresh da lista de projetos
+    onConnected()
     onClose()
   }
 
@@ -240,20 +314,91 @@ function ConnectMetaModal({ onClose, onConnected }: { onClose: () => void; onCon
 
         <div className="px-6 py-5 space-y-4">
           {/* Indicador de projeto — sempre visível */}
-          {currentProject ? (
-            <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 rounded-lg px-3 py-2">
-              <Building2 className="w-4 h-4 text-gray-400 shrink-0" />
-              Projeto ativo:{' '}
-              <span className="font-medium text-gray-900">{currentProject.name}</span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 text-sm text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              Nenhum projeto selecionado. Selecione um projeto no topo da página.
+          <div className="space-y-2">
+            {currentProject ? (
+              <div className="flex items-center justify-between gap-2 text-sm text-gray-600 bg-gray-50 rounded-lg px-3 py-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Building2 className="w-4 h-4 text-gray-400 shrink-0" />
+                  <span className="truncate">Projeto ativo: <span className="font-medium text-gray-900">{currentProject.name}</span></span>
+                </div>
+                <button
+                  onClick={() => setShowNewProject(v => !v)}
+                  className="flex items-center gap-1 text-xs text-[#D42026] hover:underline shrink-0"
+                >
+                  <Plus className="w-3 h-3" />
+                  Novo
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-2 text-sm text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  Nenhum projeto selecionado.
+                </div>
+                <button
+                  onClick={() => setShowNewProject(v => !v)}
+                  className="flex items-center gap-1 text-xs text-yellow-800 font-medium hover:underline shrink-0"
+                >
+                  <Plus className="w-3 h-3" />
+                  Criar projeto
+                </button>
+              </div>
+            )}
+
+            {showNewProject && (
+              <form onSubmit={handleCreateProject} className="flex gap-2">
+                <input
+                  type="text"
+                  value={newProjectName}
+                  onChange={e => setNewProjectName(e.target.value)}
+                  placeholder="Nome do projeto"
+                  required
+                  autoFocus
+                  className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#D42026]/40"
+                />
+                <button
+                  type="submit"
+                  disabled={creatingProject || !newProjectName.trim()}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-[#D42026] text-white text-xs font-semibold rounded-lg hover:bg-[#b91c1c] disabled:opacity-50 transition-colors"
+                >
+                  {creatingProject ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Criar'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowNewProject(false); setNewProjectName('') }}
+                  className="px-2 py-1.5 text-gray-400 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </form>
+            )}
+          </div>
+
+          {/* ── Salvando ── */}
+          {step === 'saving' && (
+            <div className="flex flex-col items-center gap-3 py-4">
+              <Loader2 className="w-7 h-7 animate-spin text-blue-500" />
+              <p className="text-sm text-gray-600">Salvando credenciais…</p>
             </div>
           )}
 
-          {/* ── Passo: sucesso ── */}
+          {/* ── Erro ── */}
+          {step === 'error' && (
+            <div className="space-y-4">
+              <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 rounded-lg p-3">
+                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                {errorMsg}
+              </div>
+              <button
+                onClick={() => setStep('signup')}
+                className="w-full px-4 py-2.5 border border-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Tentar novamente
+              </button>
+            </div>
+          )}
+
+          {/* ── Sucesso ── */}
           {step === 'success' && savedData && (
             <div className="space-y-4">
               <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-2.5">
@@ -264,18 +409,13 @@ function ConnectMetaModal({ onClose, onConnected }: { onClose: () => void; onCon
                   </p>
                 </div>
                 <div className="space-y-1.5 pl-6">
-                  {savedData.verifiedName && (
-                    <p className="text-xs text-green-700">
-                      <span className="font-medium">Empresa:</span> {savedData.verifiedName}
-                    </p>
-                  )}
                   <p className="text-xs text-green-700">
                     <span className="font-medium">WABA ID:</span>{' '}
                     <span className="font-mono">{savedData.wabaId}</span>
                   </p>
-                  {savedData.displayPhoneNumber && (
+                  {savedData.displayPhone && (
                     <p className="text-xs text-green-700">
-                      <span className="font-medium">Número:</span> {savedData.displayPhoneNumber}
+                      <span className="font-medium">Número:</span> {savedData.displayPhone}
                     </p>
                   )}
                 </div>
@@ -289,7 +429,7 @@ function ConnectMetaModal({ onClose, onConnected }: { onClose: () => void; onCon
             </div>
           )}
 
-          {/* ── Passo: signup via popup ── */}
+          {/* ── Signup via FB SDK ── */}
           {step === 'signup' && (
             <div className="space-y-4">
               {!currentProject && (
@@ -297,20 +437,8 @@ function ConnectMetaModal({ onClose, onConnected }: { onClose: () => void; onCon
                   Selecione um projeto acima antes de prosseguir.
                 </p>
               )}
-
-              {errorMsg && (
-                <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 rounded-lg p-3">
-                  <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                  {errorMsg}
-                </div>
-              )}
-
               {currentProject?.id && (
-                <PopupSignup
-                  projectId={currentProject.id}
-                  onSuccess={handleSuccess}
-                  onError={setErrorMsg}
-                />
+                <EmbeddedSignup onSuccess={handleSuccess} />
               )}
             </div>
           )}
